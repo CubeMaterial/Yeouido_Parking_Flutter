@@ -307,7 +307,6 @@ dist
 
 ### VisualStudioCode ###
 .vscode/*
-!.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
@@ -358,5 +357,8 @@ Python/config.py
 *.cc
 *.swift
 lib/constants/api_keys.dart
+linux/flutter/generated_plugin_registrant.h
+windows/flutter/generated_plugin_registrant.h
+.vscode/settings.json
 
 # End of https://www.toptal.com/developers/gitignore/api/windows,macos,flutter,android,dart,visualstudiocode,node
