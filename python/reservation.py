@@ -49,6 +49,16 @@ class ReservationCreateRequest(BaseModel):
         return self
 
 
+class ReservationStateUpdateRequest(BaseModel):
+    reservation_state: int
+
+    @model_validator(mode="after")
+    def validate_state(self) -> "ReservationStateUpdateRequest":
+        if self.reservation_state not in {1, 2, 3, 4}:
+            raise ValueError("reservation_state는 1(대기), 2(승인 완료), 3(반려), 4(완료) 중 하나여야 합니다.")
+        return self
+
+
 def set_connection_factory(factory: Any) -> None:
     global connection_factory
     connection_factory = factory
@@ -98,7 +108,7 @@ def has_overlapping_reservation(
                     SELECT COUNT(*) AS cnt
                     FROM reservation
                     WHERE facility_id = %s
-                      AND reservation_state = 1
+                      AND reservation_state IN (1, 2)
                       AND reservation_start_date < %s
                       AND reservation_end_date > %s
                     """,
@@ -158,14 +168,189 @@ def create_reservation(request: ReservationCreateRequest) -> dict:
     }
 
 
-@router.get("/user/{user_id}")
-def get_reservations(user_id: int) -> list[dict]:
+@router.get("")
+def list_reservations(
+    limit: int = 50,
+    offset: int = 0,
+    state: int | None = None,
+) -> list[dict]:
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+    if state is not None and state not in {1, 2, 3, 4}:
+        raise HTTPException(
+            status_code=400,
+            detail="state는 1(대기), 2(승인 완료), 3(반려), 4(완료) 중 하나여야 합니다.",
+        )
+
     try:
+        with closing(get_connection()) as connection:
+            with connection.cursor() as cursor:
+                where_sql = ""
+                params: tuple[Any, ...]
+                if state is not None:
+                    where_sql = "WHERE reservation_state = %s"
+                    params = (state, limit, offset)
+                else:
+                    params = (limit, offset)
+                cursor.execute(
+                    f"""
+                    SELECT
+                        reservation_id,
+                        reservation_start_date,
+                        reservation_end_date,
+                        reservation_state,
+                        reservation_date,
+                        user_id,
+                        facility_id
+                    FROM reservation
+                    {where_sql}
+                    ORDER BY reservation_date DESC
+                    LIMIT %s OFFSET %s
+                    """,
+                    params,
+                )
+                return cursor.fetchall()
+    except pymysql.MySQLError as exc:
+        raise HTTPException(status_code=500, detail=f"예약 목록 조회 실패: {exc}") from exc
+
+
+@router.get("/stats/dashboard")
+def reservation_dashboard(top: int = 3, year: int | None = None, month: int | None = None) -> dict[str, Any]:
+    """
+    관리자 대시보드용 통계.
+    - top_facilities: 전체 예약 건수 기준 상위 시설 N개
+    - monthly_counts: 해당 월(기본: 현재 월)의 전체/상태별 건수
+
+    reservation_state:
+      1 = 대기
+      2 = 승인 완료
+      3 = 반려
+      4 = 완료
+    """
+    top = max(1, min(top, 10))
+
+    now = datetime.now()
+    year = year or now.year
+    month = month or now.month
+    if month < 1 or month > 12:
+        raise HTTPException(status_code=400, detail="month는 1~12 사이여야 합니다.")
+
+    try:
+        with closing(get_connection()) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT
+                      r.facility_id AS facility_id,
+                      f.f_name AS facility_name,
+                      COUNT(*) AS cnt
+                    FROM reservation r
+                    LEFT JOIN facility f ON r.facility_id = f.f_id
+                    GROUP BY r.facility_id, f.f_name
+                    ORDER BY cnt DESC
+                    LIMIT %s
+                    """,
+                    (top,),
+                )
+                top_rows = cursor.fetchall() or []
+
+                cursor.execute(
+                    """
+                    SELECT reservation_state, COUNT(*) AS cnt
+                    FROM reservation
+                    WHERE YEAR(reservation_date) = %s AND MONTH(reservation_date) = %s
+                    GROUP BY reservation_state
+                    """,
+                    (year, month),
+                )
+                state_rows = cursor.fetchall() or []
+    except pymysql.MySQLError as exc:
+        raise HTTPException(status_code=500, detail=f"예약 통계 조회 실패: {exc}") from exc
+
+    by_state = {int(row["reservation_state"]): int(row["cnt"]) for row in state_rows}
+
+    waiting = by_state.get(1, 0)
+    approved = by_state.get(2, 0)
+    rejected = by_state.get(3, 0)
+    completed = by_state.get(4, 0)
+
+    return {
+        "month": f"{year:04d}-{month:02d}",
+        "top_facilities": [
+            {
+                "facility_id": row.get("facility_id"),
+                "facility_name": row.get("facility_name"),
+                "count": int(row.get("cnt", 0)),
+            }
+            for row in top_rows
+        ],
+        "monthly_counts": {
+            "total": waiting + approved + rejected + completed,
+            "waiting": waiting,
+            "approved": approved,
+            "rejected": rejected,
+            "completed": completed,
+        },
+    }
+
+
+@router.get("/stats/summary")
+def reservation_summary() -> dict[str, int]:
+    """
+    예약 리스트 화면 상단 요약용 통계.
+
+    reservation_state:
+      1 = 대기
+      2 = 승인 완료
+      3 = 반려
+      4 = 완료
+    """
+    try:
+        rows = execute_read(
+            """
+            SELECT reservation_state, COUNT(*) AS cnt
+            FROM reservation
+            GROUP BY reservation_state
+            """,
+            [],
+        )
+    except HTTPException:
+        raise
+
+    by_state = {int(row["reservation_state"]): int(row["cnt"]) for row in (rows or [])}
+
+    waiting = by_state.get(1, 0)
+    approved = by_state.get(2, 0)
+    rejected = by_state.get(3, 0)
+    completed = by_state.get(4, 0)
+
+    return {
+        "total": waiting + approved + rejected + completed,
+        "waiting": waiting,
+        "approved": approved,
+        "rejected": rejected,
+        "completed": completed,
+    }
+
+
+@router.get("/user/{user_id}")
+def get_reservations(user_id: int, state: int | None = None) -> list[dict]:
+    if state is not None and state not in {1, 2, 3, 4}:
+        raise HTTPException(
+            status_code=400,
+            detail="state는 1(대기), 2(승인 완료), 3(반려), 4(완료) 중 하나여야 합니다.",
+        )
+    try:
+        condition_names = ["user_id"]
+        condition_values: list[Any] = [user_id]
+        if state is not None:
+            condition_names.append("reservation_state")
+            condition_values.append(state)
         sql, params = build_sql(
             CRUD.READ,
             RESERVATION_TABLE,
-            condition_attribute_name=["user_id"],
-            condition_attribute_value=[user_id],
+            condition_attribute_name=condition_names,
+            condition_attribute_value=condition_values,
         )
     except SQLBuilderError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -208,6 +393,55 @@ def get_reservation_detail(reservation_id: int) -> dict:
         raise HTTPException(status_code=500, detail=f"예약 상세 조회 실패: {exc}") from exc
 
 
+@router.patch("/{reservation_id}/state")
+def update_reservation_state(reservation_id: int, request: ReservationStateUpdateRequest) -> dict[str, Any]:
+    return _set_reservation_state(reservation_id, request.reservation_state)
+
+
+@router.post("/{reservation_id}/approve")
+def approve_reservation(reservation_id: int) -> dict[str, Any]:
+    """
+    관리자 승인 처리.
+    reservation_state:
+      1 = 대기
+      2 = 승인 완료
+      3 = 반려
+      4 = 완료
+    """
+    return _set_reservation_state(reservation_id, 2)
+
+
+@router.post("/{reservation_id}/reject")
+def reject_reservation(reservation_id: int) -> dict[str, Any]:
+    """관리자 반려 처리."""
+    return _set_reservation_state(reservation_id, 3)
+
+
+def _set_reservation_state(reservation_id: int, reservation_state: int) -> dict[str, Any]:
+    try:
+        sql, params = build_sql(
+            CRUD.UPDATE,
+            RESERVATION_TABLE,
+            attribute_name=["reservation_state"],
+            attribute_value=[reservation_state],
+            condition_attribute_name=["reservation_id"],
+            condition_attribute_value=[reservation_id],
+        )
+    except SQLBuilderError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    affected = execute_write(sql, params)
+    if affected == 0:
+        raise HTTPException(status_code=404, detail="예약 없음")
+
+    return {
+        "status": "updated",
+        "affected_rows": affected,
+        "reservation_id": reservation_id,
+        "reservation_state": reservation_state,
+    }
+
+
 @router.delete("/{reservation_id}")
 def delete_reservation(reservation_id: int) -> dict[str, Any]:
     try:
@@ -223,7 +457,6 @@ def delete_reservation(reservation_id: int) -> dict[str, Any]:
     affected = execute_write(sql, params)
     return {"status": "deleted", "affected_rows": affected}
 
-from datetime import datetime, timedelta
 
 @router.get("/facility/{facility_id}/date/{target_date}")
 def get_reservations_by_facility_and_date(facility_id: int, target_date: str) -> list[dict]:
@@ -252,7 +485,7 @@ def get_reservations_by_facility_and_date(facility_id: int, target_date: str) ->
                         facility_id
                     FROM reservation
                     WHERE facility_id = %s
-                      AND reservation_state = 1
+                      AND reservation_state IN (1, 2)
                       AND reservation_start_date < %s
                       AND reservation_end_date > %s
                     ORDER BY reservation_start_date
