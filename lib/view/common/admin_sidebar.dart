@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:yeouido_parking_flutter/utils/app_route/app_route.dart';
 
 class AdminSidebar extends StatelessWidget {
   const AdminSidebar({super.key, required this.selectedIndex, required this.onSelected});
@@ -9,7 +10,7 @@ class AdminSidebar extends StatelessWidget {
   static const _items = <({IconData icon, String label})>[
     (icon: Icons.dashboard_outlined, label: '대시 보드'),
     (icon: Icons.event_available_outlined, label: '시설 예약 현황'),
-    (icon: Icons.festival_outlined, label: '행사 등록'),
+    (icon: Icons.apartment_outlined, label: '시설 관리'),
     (icon: Icons.help_outline, label: '문의 관리'),
     (icon: Icons.settings_outlined, label: '설정'),
   ];
@@ -58,7 +59,10 @@ class AdminSidebar extends StatelessWidget {
                     icon: item.icon,
                     label: item.label,
                     selected: selected,
-                    onTap: () => onSelected(index),
+                    onTap: () {
+                      onSelected(index);
+                      _navigateIfNeeded(context, index);
+                    },
                   );
                 },
                 separatorBuilder: (context, index) => const SizedBox(height: 4),
@@ -69,6 +73,28 @@ class AdminSidebar extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void _navigateIfNeeded(BuildContext context, int index) {
+    final targetRoute = switch (index) {
+      0 => AppRoute.adminMainPage, // 대시 보드
+      1 => AppRoute.adminReservationList, // 시설 예약 현황
+      2 => AppRoute.adminFacilityList, // 시설 관리
+      3 => AppRoute.adminAskingList, // 문의 관리
+      _ => null,
+    };
+
+    if (targetRoute == null) return;
+
+    final currentRoute = ModalRoute.of(context)?.settings.name;
+    if (currentRoute == targetRoute) return;
+
+    final scaffoldState = Scaffold.maybeOf(context);
+    if (scaffoldState != null && scaffoldState.isDrawerOpen) {
+      Navigator.of(context).pop(); // close drawer
+    }
+
+    Navigator.of(context).pushReplacementNamed(targetRoute);
   }
 }
 
@@ -116,4 +142,3 @@ class _SideNavItem extends StatelessWidget {
     );
   }
 }
-
