@@ -1,0 +1,448 @@
+import 'package:flutter/material.dart';
+
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
+
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
+
+  String notice = '';
+  bool isSubmitting = false;
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
+
+  String normalizedEmail(String value) {
+    return value.trim().toLowerCase();
+  }
+
+  bool isValidEmail(String value) {
+    final regex = RegExp(
+      r'^[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$',
+    );
+    return regex.hasMatch(value);
+  }
+
+  Future<void> login() async {
+    final email = normalizedEmail(emailController.text);
+    final password = passwordController.text;
+
+    if (!isValidEmail(email)) {
+      setState(() {
+        notice = '이메일 형식을 확인해 주세요.';
+      });
+      return;
+    }
+
+    if (password.isEmpty) {
+      setState(() {
+        notice = '비밀번호를 입력해 주세요.';
+      });
+      return;
+    }
+
+    if (password.length < 8) {
+      setState(() {
+        notice = '비밀번호는 8자 이상 입력해 주세요.';
+      });
+      return;
+    }
+
+    setState(() {
+      isSubmitting = true;
+      notice = '';
+    });
+
+    await Future.delayed(const Duration(milliseconds: 800));
+
+    if (!mounted) return;
+
+    setState(() {
+      isSubmitting = false;
+      notice = '로그인 API 연결 전입니다. 여기에 서버 연동을 붙이면 됩니다.';
+    });
+  }
+
+  void goToSignup() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('회원가입 페이지로 이동')),
+    );
+  }
+
+  void findAccount() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('아이디 찾기 / 비밀번호 찾기')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xFF63C9F2),
+              Color(0xFF75B992),
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: MediaQuery.sizeOf(context).height - 48,
+              ),
+              child: Center(
+                child: Container(
+                  width: 380,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 28,
+                    vertical: 32,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.10),
+                        blurRadius: 24,
+                        offset: const Offset(0, 14),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const ParkingHeaderArtwork(),
+                      const SizedBox(height: 20),
+                      const Text(
+                        '로그인',
+                        style: TextStyle(
+                          fontSize: 30,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF304763),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        '서비스를 이용하려면 로그인해 주세요',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF6B7280),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      _roundedInput(
+                        controller: emailController,
+                        hintText: '아이디 또는 이메일',
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                      const SizedBox(height: 12),
+                      _roundedInput(
+                        controller: passwordController,
+                        hintText: '비밀번호',
+                        obscureText: true,
+                      ),
+                      const SizedBox(height: 8),
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '비밀번호는 8자 이상 가능합니다.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                      ),
+                      if (notice.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            notice,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.red,
+                            ),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 54,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [
+                                Color(0xFF3387F5),
+                                Color(0xFF2678E6),
+                              ],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF3387F5).withValues(alpha: 0.25),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: ElevatedButton(
+                            onPressed: isSubmitting ? null : login,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              foregroundColor: Colors.white,
+                              shadowColor: Colors.transparent,
+                              disabledBackgroundColor: Colors.transparent,
+                              disabledForegroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                            ),
+                            child: Text(
+                              isSubmitting ? '로그인 중...' : '로그인',
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      Divider(
+                        color: Colors.grey.withValues(alpha: 0.30),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton(
+                                onPressed: goToSignup,
+                                style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: const Size(0, 32),
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  foregroundColor: const Color(0xFF566377),
+                                ),
+                                child: const Text(
+                                  '회원가입',
+                                  style: TextStyle(fontSize: 13),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: findAccount,
+                                style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: const Size(0, 32),
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  foregroundColor: const Color(0xFF566377),
+                                ),
+                                child: const Text(
+                                  '아이디 찾기 / 비밀번호 찾기',
+                                  style: TextStyle(fontSize: 13),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _roundedInput({
+    required TextEditingController controller,
+    required String hintText,
+    bool obscureText = false,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
+    return Container(
+      height: 52,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F8FA),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      alignment: Alignment.center,
+      child: TextField(
+        controller: controller,
+        obscureText: obscureText,
+        keyboardType: keyboardType,
+        autocorrect: false,
+        enableSuggestions: !obscureText,
+        decoration: InputDecoration(
+          hintText: hintText,
+          hintStyle: const TextStyle(
+            color: Color(0xFF9CA3AF),
+            fontSize: 16,
+          ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+        ),
+        style: const TextStyle(
+          fontSize: 16,
+          color: Color(0xFF1F2937),
+        ),
+      ),
+    );
+  }
+}
+
+class ParkingHeaderArtwork extends StatelessWidget {
+  const ParkingHeaderArtwork({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 176,
+      height: 112,
+      child: Stack(
+        alignment: Alignment.bottomCenter,
+        children: [
+          Container(
+            width: 176,
+            height: 112,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5FAFF),
+              borderRadius: BorderRadius.circular(18),
+            ),
+          ),
+          Positioned(
+            bottom: 18,
+            child: Container(
+              width: 150,
+              height: 22,
+              decoration: BoxDecoration(
+                color: const Color(0xFF96D17D),
+                borderRadius: BorderRadius.circular(30),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 20,
+            bottom: 36,
+            child: Column(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4A9BF5),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Text(
+                    'P',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 20,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  width: 30,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEBC975),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Positioned(
+            bottom: 38,
+            child: Icon(
+              Icons.location_on,
+              color: Color(0xFFF35D57),
+              size: 36,
+            ),
+          ),
+          Positioned(
+            right: 26,
+            bottom: 38,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  width: 22,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFC7DBED),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Container(
+                  width: 28,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFBAD1E5),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            right: 6,
+            bottom: 26,
+            child: Column(
+              children: [
+                Container(
+                  width: 14,
+                  height: 14,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF7C775),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Icon(
+                  Icons.park,
+                  color: Color(0xFF5EAF6E),
+                  size: 28,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
