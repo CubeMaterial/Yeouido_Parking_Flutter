@@ -1,12 +1,14 @@
 // 관리자 메인 화면. 로그인 후 여기로 옴
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:yeouido_parking_flutter/view/admin_sidebar.dart';
-import 'package:yeouido_parking_flutter/view/admin_top_bar.dart';
+import 'package:yeouido_parking_flutter/view/common/admin_sidebar.dart';
+import 'package:yeouido_parking_flutter/view/common/admin_top_bar.dart';
+import 'package:yeouido_parking_flutter/utils/parking/ihangang_parking_client.dart';
 
 class AdminMainPage extends StatefulWidget {
   const AdminMainPage({super.key});
@@ -226,29 +228,106 @@ class _ProgressTile extends StatelessWidget {
   }
 }
 
-class _ParkingStatusCard extends StatelessWidget {
+class _ParkingStatusCard extends StatefulWidget {
   const _ParkingStatusCard({required this.onMore});
 
   final VoidCallback onMore;
 
   @override
+  State<_ParkingStatusCard> createState() => _ParkingStatusCardState();
+}
+
+class _ParkingStatusCardState extends State<_ParkingStatusCard> {
+  final _client = IHangangParkingClient();
+
+  List<ParkingLotStatus>? _lots;
+  DateTime? _lastUpdated;
+  DateTime? _lastAttempt;
+  String? _error;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_refresh());
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    if (_loading) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+      _lastAttempt = DateTime.now();
+    });
+
+    try {
+      final lots = await _client.fetchRegion8Lots();
+      if (!mounted) return;
+      setState(() {
+        if (lots.isNotEmpty) _lots = lots;
+        _lastUpdated = DateTime.now();
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    const total = 500;
-    const used = 150;
-    final items = const [
-      (label: '1주차장', used: used, total: total, color: Color(0xFFD50000)),
-      (label: '2주차장', used: used, total: total, color: Color(0xFFD50000)),
-      (label: '3주차장', used: used, total: total, color: Color(0xFFFF5252)),
-      (label: '4주차장', used: used, total: total, color: Color(0xFFD50000)),
-      (label: '5주차장', used: used, total: total, color: Color(0xFFD50000)),
+    const totals = <int>[462, 176, 785, 218, 141];
+    const labels = <String>['1주차장', '2주차장', '3주차장', '4주차장', '5주차장'];
+
+    final availableByIndex = List<int>.generate(totals.length, (i) {
+      final available = (_lots != null && i < _lots!.length) ? _lots![i].available : 0;
+      return available.clamp(0, totals[i]);
+    });
+
+    final colors = const [
+      Color(0xFFD50000),
+      Color(0xFFD50000),
+      Color(0xFFFF5252),
+      Color(0xFFD50000),
+      Color(0xFFD50000),
     ];
 
     return _SectionCard(
       title: '주차장 현황',
-      trailing: TextButton.icon(
-        onPressed: onMore,
-        icon: const Icon(Icons.add, size: 18),
-        label: const Text('더보기'),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            onPressed: _loading ? null : () => unawaited(_refresh()),
+            tooltip: '새로고침',
+            icon: const Icon(Icons.refresh, size: 20),
+          ),
+          if (_loading)
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else if (_error != null)
+            Tooltip(
+              message: _error!,
+              child: const Icon(Icons.warning_amber_rounded, size: 18, color: Color(0xFFD50000)),
+            ),
+          const SizedBox(width: 8),
+          TextButton.icon(
+            onPressed: widget.onMore,
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('더보기'),
+          ),
+        ],
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -258,14 +337,30 @@ class _ParkingStatusCard extends StatelessWidget {
             runSpacing: 12,
             alignment: WrapAlignment.spaceBetween,
             children: [
-              for (final item in items)
+              for (int i = 0; i < totals.length; i++)
                 SizedBox(
                   width: itemWidth,
                   child: _DonutIndicator(
-                    label: item.label,
-                    used: item.used,
-                    total: item.total,
-                    color: item.color,
+                    label: labels[i],
+                    available: availableByIndex[i],
+                    total: totals[i],
+                    color: colors[i % colors.length],
+                  ),
+                ),
+              if (_lastUpdated != null || _lastAttempt != null)
+                SizedBox(
+                  width: constraints.maxWidth,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      _buildUpdatedText(),
+                      textAlign: TextAlign.end,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF757575),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
             ],
@@ -274,25 +369,40 @@ class _ParkingStatusCard extends StatelessWidget {
       ),
     );
   }
+
+  String _buildUpdatedText() {
+    String format(DateTime dt) =>
+        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
+
+    final updated = _lastUpdated == null ? null : format(_lastUpdated!);
+    final attempt = _lastAttempt == null ? null : format(_lastAttempt!);
+
+    if (updated != null && attempt != null && updated != attempt) {
+      return '업데이트: $updated (시도: $attempt)';
+    }
+    if (updated != null) return '업데이트: $updated';
+    if (attempt != null) return '시도: $attempt';
+    return '';
+  }
 }
 
 class _DonutIndicator extends StatelessWidget {
   const _DonutIndicator({
     required this.label,
-    required this.used,
+    required this.available,
     required this.total,
     required this.color,
   });
 
   final String label;
-  final int used;
+  final int available;
   final int total;
   final Color color;
 
   @override
   Widget build(BuildContext context) {
-    final ratio = total == 0 ? 0.0 : (used / total).clamp(0, 1).toDouble();
-    final remaining = math.max(0, total - used);
+    final ratio = total == 0 ? 0.0 : (available / total).clamp(0, 1).toDouble();
+    final remaining = math.max(0, total - available);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -309,7 +419,7 @@ class _DonutIndicator extends StatelessWidget {
                   centerSpaceRadius: 32,
                   sections: [
                     PieChartSectionData(
-                      value: ratio <= 0 ? 0.0001 : used.toDouble(),
+                      value: ratio <= 0 ? 0.0001 : available.toDouble(),
                       color: color,
                       radius: 18,
                       showTitle: false,
@@ -325,7 +435,7 @@ class _DonutIndicator extends StatelessWidget {
                 duration: Duration.zero,
               ),
               Text(
-                '$used/\n$total',
+                '$available/\n$total',
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
               ),

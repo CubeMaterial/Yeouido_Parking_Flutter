@@ -6,6 +6,7 @@ from typing import Any
 
 import pymysql
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from routers import include_routers
@@ -14,25 +15,38 @@ from routers import include_routers
 load_dotenv(Path(__file__).with_name("py.env"))
 
 
-def get_required_env(name: str) -> str:
+def _get_env(name: str) -> str | None:
     value = os.getenv(name)
-    if value is None or not value.strip():
-        raise RuntimeError(f"{name} 환경 변수가 설정되어 있지 않습니다.")
-    return value
+    if value is None:
+        return None
+    value = value.strip()
+    return value if value else None
 
 
-DB_CONFIG = {
-    "host": get_required_env("DB_HOST"),
-    "port": int(os.getenv("DB_PORT", "3306")),
-    "user": get_required_env("DB_USER"),
-    "password": get_required_env("DB_PASSWORD"),
-    "database": get_required_env("DB_NAME"),
-    "charset": "utf8mb4",
-    "connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "5")),
-    "read_timeout": int(os.getenv("DB_READ_TIMEOUT", "5")),
-    "write_timeout": int(os.getenv("DB_WRITE_TIMEOUT", "5")),
-    "cursorclass": pymysql.cursors.DictCursor,
-}
+def _load_db_config() -> dict[str, Any] | None:
+    host = _get_env("DB_HOST")
+    user = _get_env("DB_USER")
+    password = _get_env("DB_PASSWORD")
+    database = _get_env("DB_NAME")
+
+    if not all([host, user, password, database]):
+        return None
+
+    return {
+        "host": host,
+        "port": int(os.getenv("DB_PORT", "3306")),
+        "user": user,
+        "password": password,
+        "database": database,
+        "charset": "utf8mb4",
+        "connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "5")),
+        "read_timeout": int(os.getenv("DB_READ_TIMEOUT", "5")),
+        "write_timeout": int(os.getenv("DB_WRITE_TIMEOUT", "5")),
+        "cursorclass": pymysql.cursors.DictCursor,
+    }
+
+
+DB_CONFIG: dict[str, Any] | None = None
 
 
 DENIED_COLUMNS = {
@@ -47,6 +61,8 @@ ALLOWED_COLUMNS: dict[str, set[str]] = {}
 
 
 def get_connection() -> pymysql.connections.Connection:
+    if DB_CONFIG is None:
+        raise RuntimeError("DB 환경 변수가 설정되어 있지 않습니다.")
     return pymysql.connect(**DB_CONFIG)
 
 
@@ -100,7 +116,10 @@ def validate_column_names(table_name: str, column_names: list[str]) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> Any:
-    load_allowed_schema()
+    global DB_CONFIG
+    DB_CONFIG = _load_db_config()
+    if DB_CONFIG is not None:
+        load_allowed_schema()
     yield
 
 
@@ -111,6 +130,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 include_routers(app, get_connection)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/", summary="Service status")
@@ -124,6 +151,11 @@ def read_root() -> dict[str, str]:
 
 @app.get("/db-check", summary="Check MySQL connection")
 def db_check() -> dict[str, str]:
+    if DB_CONFIG is None:
+        raise HTTPException(
+            status_code=503,
+            detail="DB 환경 변수가 설정되어 있지 않아 DB 체크를 수행할 수 없습니다.",
+        )
     try:
         with closing(get_connection()) as connection:
             with connection.cursor() as cursor:
