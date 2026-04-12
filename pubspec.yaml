@@ -35,6 +35,43 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
+  get_storage: ^2.1.1
+
+  # API 통신
+  http: ^1.6.0
+
+  # 위치 / 지도
+  geocoding: ^4.0.0
+  geolocator: ^14.0.2
+  flutter_map: ^8.2.2
+  latlong2: ^0.9.1
+
+  # Firebase
+  firebase_core: ^4.5.0
+  firebase_auth: ^6.2.0
+  firebase_storage: ^13.1.0
+  cloud_firestore: ^6.1.3
+  firebase_messaging: ^16.1.2
+
+  #   # Google 로그인
+  # google_sign_in: ^7.2.0
+  # google_sign_in_web: ^1.1.3
+
+  # 알림
+  flutter_local_notifications: ^21.0.0
+
+  # 반응형 / 시각화
+  responsive_framework: ^1.5.1
+  fl_chart: ^1.0.0
+  html: ^0.15.6
+
+  # 앱 리소스 생성
+  flutter_native_splash: ^2.4.7
+
+    # 지도 / 캘린더
+  google_maps_flutter: ^2.16.0
+  table_calendar: ^3.2.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
