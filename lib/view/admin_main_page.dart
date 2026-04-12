@@ -1,10 +1,12 @@
 // 관리자 메인 화면. 로그인 후 여기로 옴
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:yeouido_parking_flutter/view/common/admin_sidebar.dart';
 import 'package:yeouido_parking_flutter/view/common/admin_top_bar.dart';
@@ -18,8 +20,58 @@ class AdminMainPage extends StatefulWidget {
 }
 
 class _AdminMainPageState extends State<AdminMainPage> {
+  static const String _baseUrl = String.fromEnvironment(
+    'FASTAPI_BASE_URL',
+    defaultValue: 'http://127.0.0.1:8000',
+  );
+
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   int _selectedIndex = 0;
+
+  bool _reservationStatsLoading = false;
+  String? _reservationStatsError;
+  _ReservationDashboardStats? _reservationStats;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadReservationDashboardStats());
+  }
+
+  Future<void> _loadReservationDashboardStats() async {
+    if (_reservationStatsLoading) return;
+    setState(() {
+      _reservationStatsLoading = true;
+      _reservationStatsError = null;
+    });
+
+    try {
+      final base = _baseUrl.replaceFirst(RegExp(r'/$'), '');
+      final uri = Uri.parse(
+        '$base/reservation/stats/dashboard',
+      ).replace(queryParameters: const {'top': '3'});
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('HTTP ${response.statusCode}');
+      }
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      if (decoded is! Map<String, dynamic>) {
+        throw Exception('Unexpected response');
+      }
+      final stats = _ReservationDashboardStats.fromJson(decoded);
+      if (!mounted) return;
+      setState(() {
+        _reservationStats = stats;
+        _reservationStatsLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _reservationStatsError = e.toString();
+        _reservationStatsLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +86,8 @@ class _AdminMainPageState extends State<AdminMainPage> {
               ? Drawer(
                   child: AdminSidebar(
                     selectedIndex: _selectedIndex,
-                    onSelected: (index) => setState(() => _selectedIndex = index),
+                    onSelected: (index) =>
+                        setState(() => _selectedIndex = index),
                   ),
                 )
               : null,
@@ -45,7 +98,8 @@ class _AdminMainPageState extends State<AdminMainPage> {
                   width: 220,
                   child: AdminSidebar(
                     selectedIndex: _selectedIndex,
-                    onSelected: (index) => setState(() => _selectedIndex = index),
+                    onSelected: (index) =>
+                        setState(() => _selectedIndex = index),
                   ),
                 ),
               Expanded(
@@ -53,7 +107,9 @@ class _AdminMainPageState extends State<AdminMainPage> {
                   children: [
                     AdminTopBar(
                       useDrawer: useDrawer,
-                      onMenuPressed: useDrawer ? () => _scaffoldKey.currentState?.openDrawer() : null,
+                      onMenuPressed: useDrawer
+                          ? () => _scaffoldKey.currentState?.openDrawer()
+                          : null,
                     ),
                     Expanded(
                       child: Scrollbar(
@@ -65,12 +121,14 @@ class _AdminMainPageState extends State<AdminMainPage> {
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 _ReservationStatusCard(
+                                  loading: _reservationStatsLoading,
+                                  error: _reservationStatsError,
+                                  stats: _reservationStats,
+                                  onRefresh: _loadReservationDashboardStats,
                                   onMore: () {},
                                 ),
                                 const SizedBox(height: 16),
-                                _ParkingStatusCard(
-                                  onMore: () {},
-                                ),
+                                _ParkingStatusCard(onMore: () {}),
                                 const SizedBox(height: 16),
                                 _BottomRow(),
                                 const SizedBox(height: 24),
@@ -92,11 +150,7 @@ class _AdminMainPageState extends State<AdminMainPage> {
 }
 
 class _SectionCard extends StatelessWidget {
-  const _SectionCard({
-    required this.title,
-    this.trailing,
-    required this.child,
-  });
+  const _SectionCard({required this.title, this.trailing, required this.child});
 
   final String title;
   final Widget? trailing;
@@ -117,7 +171,9 @@ class _SectionCard extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const Spacer(),
                 trailing ?? const SizedBox.shrink(),
@@ -133,43 +189,183 @@ class _SectionCard extends StatelessWidget {
 }
 
 class _ReservationStatusCard extends StatelessWidget {
-  const _ReservationStatusCard({required this.onMore});
+  const _ReservationStatusCard({
+    required this.loading,
+    required this.error,
+    required this.stats,
+    required this.onRefresh,
+    required this.onMore,
+  });
 
   final VoidCallback onMore;
+  final bool loading;
+  final String? error;
+  final _ReservationDashboardStats? stats;
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
-    final tiles = const [
-      (name: '야구장', value: 0.5),
-      (name: '사우나', value: 0.5),
-      (name: '00 공원', value: 0.5),
-      (name: '야구장', value: 0.5),
-    ];
-
     return _SectionCard(
       title: '시설 예약 현황',
-      trailing: TextButton.icon(
-        onPressed: onMore,
-        icon: const Icon(Icons.add, size: 18),
-        label: const Text('더보기'),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            onPressed: loading ? null : onRefresh,
+            tooltip: '새로고침',
+            icon: const Icon(Icons.refresh, size: 20),
+          ),
+          if (loading)
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else if (error != null)
+            Tooltip(
+              message: error!,
+              child: const Icon(
+                Icons.warning_amber_rounded,
+                size: 18,
+                color: Color(0xFFD50000),
+              ),
+            ),
+          const SizedBox(width: 8),
+          TextButton.icon(
+            onPressed: onMore,
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('더보기'),
+          ),
+        ],
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final crossAxisCount = constraints.maxWidth < 720 ? 1 : 2;
-          final tileWidth =
-              crossAxisCount == 1 ? constraints.maxWidth : (constraints.maxWidth - 12) / 2;
-          return Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              for (final t in tiles)
-                SizedBox(
-                  width: tileWidth,
-                  child: _ProgressTile(
-                    title: t.name,
-                    value: t.value,
+          if (loading && stats == null) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+
+          if (error != null && stats == null) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    '시설 정보를 불러오지 못했습니다.',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: onRefresh,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('다시 시도'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          if (stats == null) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                '통계 데이터가 없습니다.',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF616161),
                 ),
+              ),
+            );
+          }
+
+          final s = stats!;
+          final top = s.topFacilities;
+          final maxCount = top.isEmpty
+              ? 0
+              : top.map((e) => e.count).reduce(math.max);
+          final crossAxisCount = constraints.maxWidth < 720 ? 1 : 2;
+          final tileWidth = crossAxisCount == 1
+              ? constraints.maxWidth
+              : (constraints.maxWidth - 12) / 2;
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Best 3 (전체 예약 건수)',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  for (final t in top)
+                    SizedBox(
+                      width: tileWidth,
+                      child: _TopFacilityTile(
+                        name: t.name,
+                        count: t.count,
+                        maxCount: maxCount,
+                      ),
+                    ),
+                  if (top.isEmpty)
+                    SizedBox(
+                      width: constraints.maxWidth,
+                      child: const Text(
+                        '데이터 없음',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF616161),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '${s.month} 예약 요약',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _CountChip(
+                    label: '전체',
+                    value: s.monthly.total,
+                    color: const Color(0xFF424242),
+                  ),
+                  _CountChip(
+                    label: '대기',
+                    value: s.monthly.waiting,
+                    color: const Color(0xFF616161),
+                  ),
+                  _CountChip(
+                    label: '승인',
+                    value: s.monthly.approved,
+                    color: const Color(0xFF2E7D32),
+                  ),
+                  _CountChip(
+                    label: '반려',
+                    value: s.monthly.rejected,
+                    color: const Color(0xFFD50000),
+                  ),
+                  _CountChip(
+                    label: '완료',
+                    value: s.monthly.completed,
+                    color: const Color(0xFF1565C0),
+                  ),
+                ],
+              ),
             ],
           );
         },
@@ -178,15 +374,22 @@ class _ReservationStatusCard extends StatelessWidget {
   }
 }
 
-class _ProgressTile extends StatelessWidget {
-  const _ProgressTile({required this.title, required this.value});
+class _TopFacilityTile extends StatelessWidget {
+  const _TopFacilityTile({
+    required this.name,
+    required this.count,
+    required this.maxCount,
+  });
 
-  final String title;
-  final double value;
+  final String name;
+  final int count;
+  final int maxCount;
 
   @override
   Widget build(BuildContext context) {
-    final percent = (value * 100).round();
+    final ratio = maxCount <= 0
+        ? 0.0
+        : (count / maxCount).clamp(0, 1).toDouble();
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -196,34 +399,151 @@ class _ProgressTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+          Text(name, style: const TextStyle(fontWeight: FontWeight.w900)),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: LinearProgressIndicator(
-                    value: value.clamp(0, 1),
-                    minHeight: 18,
-                    backgroundColor: const Color(0xFFBDBDBD),
-                    valueColor: const AlwaysStoppedAnimation(Color(0xFF7E7AF5)),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              SizedBox(
-                width: 42,
-                child: Text(
-                  '$percent%',
-                  textAlign: TextAlign.end,
-                  style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.white),
-                ),
-              ),
-            ],
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: LinearProgressIndicator(
+              value: ratio,
+              minHeight: 12,
+              backgroundColor: const Color(0xFFBDBDBD),
+              valueColor: const AlwaysStoppedAnimation(Color(0xFF7E7AF5)),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '예약 $count건',
+            style: const TextStyle(
+              fontSize: 12,
+              color: Color(0xFF616161),
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CountChip extends StatelessWidget {
+  const _CountChip({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final int value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '$value',
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReservationDashboardStats {
+  const _ReservationDashboardStats({
+    required this.month,
+    required this.topFacilities,
+    required this.monthly,
+  });
+
+  final String month;
+  final List<_TopFacility> topFacilities;
+  final _MonthlyCounts monthly;
+
+  factory _ReservationDashboardStats.fromJson(Map<String, dynamic> json) {
+    final top = (json['top_facilities'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(_TopFacility.fromJson)
+        .toList(growable: false);
+    final monthly = _MonthlyCounts.fromJson(
+      (json['monthly_counts'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
+    );
+    return _ReservationDashboardStats(
+      month: (json['month']?.toString() ?? '').trim().isEmpty
+          ? '-'
+          : json['month'].toString(),
+      topFacilities: top,
+      monthly: monthly,
+    );
+  }
+}
+
+class _TopFacility {
+  const _TopFacility({
+    required this.id,
+    required this.name,
+    required this.count,
+  });
+
+  final int? id;
+  final String name;
+  final int count;
+
+  factory _TopFacility.fromJson(Map<String, dynamic> json) {
+    final id = int.tryParse(json['facility_id']?.toString() ?? '');
+    final rawName = (json['facility_name']?.toString() ?? '').trim();
+    final name = rawName.isEmpty ? (id == null ? '시설' : '시설 #$id') : rawName;
+    final count = int.tryParse(json['count']?.toString() ?? '') ?? 0;
+    return _TopFacility(id: id, name: name, count: count);
+  }
+}
+
+class _MonthlyCounts {
+  const _MonthlyCounts({
+    required this.total,
+    required this.waiting,
+    required this.approved,
+    required this.rejected,
+    required this.completed,
+  });
+
+  final int total;
+  final int waiting;
+  final int approved;
+  final int rejected;
+  final int completed;
+
+  factory _MonthlyCounts.fromJson(Map<String, dynamic> json) {
+    int read(String key) => int.tryParse(json[key]?.toString() ?? '') ?? 0;
+    return _MonthlyCounts(
+      total: read('total'),
+      waiting: read('waiting'),
+      approved: read('approved'),
+      rejected: read('rejected'),
+      completed: read('completed'),
     );
   }
 }
@@ -288,7 +608,9 @@ class _ParkingStatusCardState extends State<_ParkingStatusCard> {
     const labels = <String>['1주차장', '2주차장', '3주차장', '4주차장', '5주차장'];
 
     final availableByIndex = List<int>.generate(totals.length, (i) {
-      final available = (_lots != null && i < _lots!.length) ? _lots![i].available : 0;
+      final available = (_lots != null && i < _lots!.length)
+          ? _lots![i].available
+          : 0;
       return available.clamp(0, totals[i]);
     });
 
@@ -319,7 +641,11 @@ class _ParkingStatusCardState extends State<_ParkingStatusCard> {
           else if (_error != null)
             Tooltip(
               message: _error!,
-              child: const Icon(Icons.warning_amber_rounded, size: 18, color: Color(0xFFD50000)),
+              child: const Icon(
+                Icons.warning_amber_rounded,
+                size: 18,
+                color: Color(0xFFD50000),
+              ),
             ),
           const SizedBox(width: 8),
           TextButton.icon(
@@ -437,7 +763,10 @@ class _DonutIndicator extends StatelessWidget {
               Text(
                 '$available/\n$total',
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 12,
+                ),
               ),
             ],
           ),
@@ -456,25 +785,14 @@ class _BottomRow extends StatelessWidget {
       builder: (context, constraints) {
         final bool stacked = constraints.maxWidth < 980;
         final mapCard = const _MapCard();
-        final envCard = const _EnvironmentCard();
 
         if (stacked) {
-          return Column(
-            children: [
-              mapCard,
-              const SizedBox(height: 16),
-              envCard,
-            ],
-          );
+          return Column(children: [mapCard]);
         }
 
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Expanded(flex: 3, child: _MapCard()),
-            SizedBox(width: 16),
-            Expanded(flex: 2, child: _EnvironmentCard()),
-          ],
+          children: const [Expanded(flex: 3, child: _MapCard())],
         );
       },
     );
@@ -517,171 +835,5 @@ class _MapCard extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-class _EnvironmentCard extends StatelessWidget {
-  const _EnvironmentCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return _SectionCard(
-      title: '환경 지수',
-      child: Column(
-        children: const [
-          _GaugeBlock(
-            title: '생활기상지수',
-            value: 0.35,
-            badgeText: '2',
-          ),
-          SizedBox(height: 18),
-          _GaugeBlock(
-            title: '대기확산지수',
-            value: 0.7,
-            badgeText: '34',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _GaugeBlock extends StatelessWidget {
-  const _GaugeBlock({required this.title, required this.value, required this.badgeText});
-
-  final String title;
-  final double value;
-  final String badgeText;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F5F5),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE0E0E0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
-          const SizedBox(height: 10),
-          Center(
-            child: _SemiGauge(
-              value: value,
-              badgeText: badgeText,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SemiGauge extends StatelessWidget {
-  const _SemiGauge({required this.value, required this.badgeText});
-
-  final double value;
-  final String badgeText;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 240,
-      height: 150,
-      child: CustomPaint(
-        painter: _SemiGaugePainter(value: value.clamp(0, 1), badgeText: badgeText),
-      ),
-    );
-  }
-}
-
-class _SemiGaugePainter extends CustomPainter {
-  _SemiGaugePainter({required this.value, required this.badgeText});
-
-  final double value;
-  final String badgeText;
-
-  static const _colors = [
-    Color(0xFF2F6BFF), // 낮음
-    Color(0xFF34C759), // 보통
-    Color(0xFFFFCC00), // 높음
-    Color(0xFFFF9500), // 매우높음
-    Color(0xFFFF3B30), // 위험
-  ];
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height);
-    final radius = math.min(size.width / 2, size.height) - 12;
-    final stroke = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 18
-      ..strokeCap = StrokeCap.round;
-
-    final rect = Rect.fromCircle(center: center, radius: radius);
-    final sweep = math.pi / _colors.length;
-    for (int i = 0; i < _colors.length; i++) {
-      stroke.color = _colors[i];
-      canvas.drawArc(rect, math.pi + (sweep * i), sweep, false, stroke);
-    }
-
-    final needleAngle = math.pi + (math.pi * (1 - value));
-    final needlePaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..color = const Color(0xFF424242);
-
-    final needleEnd = Offset(
-      center.dx + (radius - 10) * math.cos(needleAngle),
-      center.dy + (radius - 10) * math.sin(needleAngle),
-    );
-    canvas.drawLine(center, needleEnd, needlePaint);
-
-    final knobPaint = Paint()..color = Colors.white;
-    canvas.drawCircle(center, 18, Paint()..color = const Color(0xFF424242));
-    canvas.drawCircle(center, 16, knobPaint);
-
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: badgeText,
-        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Color(0xFF424242)),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    textPainter.paint(
-      canvas,
-      Offset(center.dx - (textPainter.width / 2), center.dy - (textPainter.height / 2)),
-    );
-
-    final legend = [
-      ('낮음', _colors[0]),
-      ('보통', _colors[1]),
-      ('높음', _colors[2]),
-      ('매우높음', _colors[3]),
-      ('위험', _colors[4]),
-    ];
-    final legendTop = 6.0;
-    final spacing = (size.width - 12) / legend.length;
-    for (int i = 0; i < legend.length; i++) {
-      final (label, color) = legend[i];
-      final x = 6 + spacing * i + (spacing / 2);
-      final dot = Paint()..color = color;
-      canvas.drawCircle(Offset(x, legendTop + 4), 4, dot);
-      final t = TextPainter(
-        text: TextSpan(
-          text: label,
-          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF616161)),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      t.paint(canvas, Offset(x - (t.width / 2), legendTop + 10));
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _SemiGaugePainter oldDelegate) {
-    return oldDelegate.value != value || oldDelegate.badgeText != badgeText;
   }
 }
