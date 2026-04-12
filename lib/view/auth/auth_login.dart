@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../vm/auth_api.dart';
+import 'auth_register.dart';
+
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -62,19 +65,48 @@ class _LoginPageState extends State<LoginPage> {
       notice = '';
     });
 
-    await Future.delayed(const Duration(milliseconds: 800));
+    try {
+      final session = await AuthApi.login(
+        email: email,
+        password: password,
+      );
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      isSubmitting = false;
-      notice = '로그인 API 연결 전입니다. 여기에 서버 연동을 붙이면 됩니다.';
-    });
+      setState(() {
+        isSubmitting = false;
+        notice = '${session.userEmail} 로그인되었습니다.';
+      });
+    } on AuthApiException catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        isSubmitting = false;
+        notice = error.isNotRegistered ? '' : error.message;
+      });
+
+      if (error.isNotRegistered) {
+        await showSignupPrompt(email: email, password: password);
+      }
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        isSubmitting = false;
+        notice = '요청 처리에 실패했습니다.';
+      });
+    }
   }
 
   void goToSignup() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('회원가입 페이지로 이동')),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SignupPage(
+          prefilledEmail: normalizedEmail(emailController.text),
+          prefilledPassword: passwordController.text,
+        ),
+      ),
     );
   }
 
@@ -82,6 +114,45 @@ class _LoginPageState extends State<LoginPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('아이디 찾기 / 비밀번호 찾기')),
     );
+  }
+
+  Future<void> showSignupPrompt({
+    required String email,
+    required String password,
+  }) async {
+    final shouldSignup = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('존재하지 않는 회원입니다.'),
+          content: const Text('회원 가입 하시겠습니까?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('아니요'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(foregroundColor: Colors.blue),
+              child: const Text('네'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldSignup == true && mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SignupPage(
+            prefilledEmail: email,
+            prefilledPassword: password,
+          ),
+        ),
+      );
+    }
   }
 
   @override

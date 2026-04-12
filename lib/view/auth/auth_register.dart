@@ -1,7 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../../vm/auth_api.dart';
+
 class SignupPage extends StatefulWidget {
-  const SignupPage({super.key});
+  final String prefilledEmail;
+  final String prefilledPassword;
+
+  const SignupPage({
+    super.key,
+    this.prefilledEmail = '',
+    this.prefilledPassword = '',
+  });
 
   @override
   State<SignupPage> createState() => _SignupPageState();
@@ -12,18 +21,30 @@ class _SignupPageState extends State<SignupPage> {
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController confirmPasswordController =
       TextEditingController();
-  final TextEditingController phoneNumberController = TextEditingController();
+  final TextEditingController nameController = TextEditingController();
 
   String notice = '';
   bool isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    emailOrIdController.text = normalizedEmail(widget.prefilledEmail);
+    passwordController.text = widget.prefilledPassword;
+    confirmPasswordController.text = widget.prefilledPassword;
+  }
 
   @override
   void dispose() {
     emailOrIdController.dispose();
     passwordController.dispose();
     confirmPasswordController.dispose();
-    phoneNumberController.dispose();
+    nameController.dispose();
     super.dispose();
+  }
+
+  String normalizedEmail(String value) {
+    return value.trim().toLowerCase();
   }
 
   bool isValidEmail(String value) {
@@ -34,19 +55,19 @@ class _SignupPageState extends State<SignupPage> {
   }
 
   Future<void> signup() async {
-    final emailOrId = emailOrIdController.text.trim();
+    final email = normalizedEmail(emailOrIdController.text);
     final password = passwordController.text;
     final confirmPassword = confirmPasswordController.text;
-    final phoneNumber = phoneNumberController.text.trim();
+    final name = nameController.text.trim();
 
-    if (emailOrId.isEmpty) {
+    if (email.isEmpty) {
       setState(() {
-        notice = '아이디 또는 이메일을 입력해 주세요.';
+        notice = '이메일을 입력해 주세요.';
       });
       return;
     }
 
-    if (emailOrId.contains('@') && !isValidEmail(emailOrId)) {
+    if (!isValidEmail(email)) {
       setState(() {
         notice = '이메일 형식을 확인해 주세요.';
       });
@@ -81,26 +102,43 @@ class _SignupPageState extends State<SignupPage> {
       return;
     }
 
-    if (phoneNumber.isEmpty) {
-      setState(() {
-        notice = '휴대폰 번호를 입력해 주세요.';
-      });
-      return;
-    }
-
     setState(() {
       isSubmitting = true;
       notice = '';
     });
 
-    await Future.delayed(const Duration(milliseconds: 800));
+    try {
+      await AuthApi.signup(
+        email: email,
+        password: password,
+        name: name,
+      );
+      final session = await AuthApi.login(
+        email: email,
+        password: password,
+      );
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      isSubmitting = false;
-      notice = '회원가입 API 연결 전입니다. 여기에 서버 연동을 붙이면 됩니다.';
-    });
+      setState(() {
+        isSubmitting = false;
+        notice = '${session.userEmail} 회원가입 및 로그인 완료';
+      });
+    } on AuthApiException catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        isSubmitting = false;
+        notice = error.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        isSubmitting = false;
+        notice = '요청 처리에 실패했습니다.';
+      });
+    }
   }
 
   void goToLogin() {
@@ -174,7 +212,7 @@ class _SignupPageState extends State<SignupPage> {
                       const SizedBox(height: 32),
                       RoundedInputField(
                         controller: emailOrIdController,
-                        hintText: '아이디 또는 이메일',
+                        hintText: '이메일',
                         keyboardType: TextInputType.emailAddress,
                       ),
                       const SizedBox(height: 14),
@@ -191,9 +229,8 @@ class _SignupPageState extends State<SignupPage> {
                       ),
                       const SizedBox(height: 14),
                       RoundedInputField(
-                        controller: phoneNumberController,
-                        hintText: '휴대폰 번호',
-                        keyboardType: TextInputType.phone,
+                        controller: nameController,
+                        hintText: '이름',
                       ),
                       if (notice.isNotEmpty) ...[
                         const SizedBox(height: 14),
