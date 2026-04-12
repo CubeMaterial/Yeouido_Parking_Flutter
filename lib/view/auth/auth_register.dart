@@ -22,6 +22,7 @@ class _SignupPageState extends State<SignupPage> {
   final TextEditingController confirmPasswordController =
       TextEditingController();
   final TextEditingController nameController = TextEditingController();
+  final TextEditingController phoneController = TextEditingController();
 
   String notice = '';
   bool isSubmitting = false;
@@ -40,6 +41,7 @@ class _SignupPageState extends State<SignupPage> {
     passwordController.dispose();
     confirmPasswordController.dispose();
     nameController.dispose();
+    phoneController.dispose();
     super.dispose();
   }
 
@@ -54,11 +56,21 @@ class _SignupPageState extends State<SignupPage> {
     return regex.hasMatch(value.trim());
   }
 
+  String normalizedPhoneNumber(String value) {
+    return value.trim();
+  }
+
+  bool isValidPhoneNumber(String value) {
+    final digits = value.replaceAll(RegExp(r'\D'), '');
+    return digits.length >= 10 && digits.length <= 11;
+  }
+
   Future<void> signup() async {
     final email = normalizedEmail(emailOrIdController.text);
     final password = passwordController.text;
     final confirmPassword = confirmPasswordController.text;
     final name = nameController.text.trim();
+    final phone = normalizedPhoneNumber(phoneController.text);
 
     if (email.isEmpty) {
       setState(() {
@@ -70,6 +82,13 @@ class _SignupPageState extends State<SignupPage> {
     if (!isValidEmail(email)) {
       setState(() {
         notice = '이메일 형식을 확인해 주세요.';
+      });
+      return;
+    }
+
+    if (!isValidPhoneNumber(phone)) {
+      setState(() {
+        notice = '전화번호를 확인해 주세요.';
       });
       return;
     }
@@ -111,6 +130,7 @@ class _SignupPageState extends State<SignupPage> {
       await AuthApi.signup(
         email: email,
         password: password,
+        phone: phone,
         name: name,
       );
       final session = await AuthApi.login(
@@ -189,8 +209,6 @@ class _SignupPageState extends State<SignupPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const SignupTopIllustration(),
-                      const SizedBox(height: 24),
                       const Text(
                         '회원가입',
                         style: TextStyle(
@@ -211,9 +229,20 @@ class _SignupPageState extends State<SignupPage> {
                       ),
                       const SizedBox(height: 32),
                       RoundedInputField(
+                        controller: nameController,
+                        hintText: '이름',
+                      ),
+                      const SizedBox(height: 14),
+                      RoundedInputField(
                         controller: emailOrIdController,
                         hintText: '이메일',
                         keyboardType: TextInputType.emailAddress,
+                      ),
+                      const SizedBox(height: 14),
+                      RoundedInputField(
+                        controller: phoneController,
+                        hintText: '전화번호',
+                        keyboardType: TextInputType.phone,
                       ),
                       const SizedBox(height: 14),
                       RoundedInputField(
@@ -226,11 +255,6 @@ class _SignupPageState extends State<SignupPage> {
                         controller: confirmPasswordController,
                         hintText: '비밀번호 확인',
                         obscureText: true,
-                      ),
-                      const SizedBox(height: 14),
-                      RoundedInputField(
-                        controller: nameController,
-                        hintText: '이름',
                       ),
                       if (notice.isNotEmpty) ...[
                         const SizedBox(height: 14),
@@ -385,126 +409,6 @@ class RoundedInputField extends StatelessWidget {
           fontSize: 18,
           fontWeight: FontWeight.w500,
           color: Color(0xFF1F2937),
-        ),
-      ),
-    );
-  }
-}
-
-class SignupTopIllustration extends StatelessWidget {
-  const SignupTopIllustration({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 170,
-      child: Center(
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Container(
-              width: 180,
-              height: 180,
-              decoration: const BoxDecoration(
-                color: Color(0xFFEAF4FB),
-                shape: BoxShape.circle,
-              ),
-            ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Column(
-                      children: [
-                        Container(
-                          width: 42,
-                          height: 52,
-                          decoration: BoxDecoration(
-                            color: Colors.blue.withValues(alpha: 0.90),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          alignment: Alignment.center,
-                          child: const Text(
-                            'P',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Container(
-                          width: 50,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: Colors.green.withValues(alpha: 0.75),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(width: 18),
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: Colors.red.withValues(alpha: 0.90),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        Container(
-                          width: 14,
-                          height: 14,
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(width: 18),
-                    Column(
-                      children: [
-                        Container(
-                          width: 34,
-                          height: 34,
-                          decoration: BoxDecoration(
-                            color: Colors.green.withValues(alpha: 0.80),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Container(
-                          width: 10,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            color: Colors.green.withValues(alpha: 0.75),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Container(
-                  width: 140,
-                  height: 16,
-                  decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.22),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-              ],
-            ),
-          ],
         ),
       ),
     );

@@ -6,12 +6,14 @@ class AuthSession {
   final int userId;
   final String userEmail;
   final String? userName;
+  final String? userPhone;
   final String? userDate;
 
   const AuthSession({
     required this.userId,
     required this.userEmail,
     this.userName,
+    this.userPhone,
     this.userDate,
   });
 
@@ -20,6 +22,7 @@ class AuthSession {
       userId: json['user_id'] as int,
       userEmail: json['user_email'] as String,
       userName: json['user_name'] as String?,
+      userPhone: json['user_phone'] as String?,
       userDate: json['user_date']?.toString(),
     );
   }
@@ -60,6 +63,7 @@ class AuthApi {
   static Future<void> signup({
     required String email,
     required String password,
+    required String phone,
     String? name,
   }) async {
     await _postJson(
@@ -68,6 +72,7 @@ class AuthApi {
         'user_email': email,
         'user_password': password,
         'user_name': name == null || name.isEmpty ? null : name,
+        'user_phone': phone,
       },
     );
   }
