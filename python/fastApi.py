@@ -8,9 +8,6 @@ import pymysql
 from fastapi import FastAPI, HTTPException
 from dotenv import load_dotenv
 
-from auth import set_connection_factory
-from facility import set_connection_factory as set_facility_connection_factory
-from reservation import set_connection_factory as set_reservation_connection_factory
 from routers import include_routers
 
 
@@ -113,10 +110,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
-set_connection_factory(get_connection)
-set_facility_connection_factory(get_connection)  # facility
-set_reservation_connection_factory(get_connection)  # reservation
-include_routers(app)
+include_routers(app, get_connection)
 
 
 @app.get("/", summary="Service status")
