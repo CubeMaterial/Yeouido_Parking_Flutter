@@ -22,14 +22,21 @@ PASSWORD_HASH_ITERATIONS = 260_000
 PASSWORD_SALT_BYTES = 16
 
 USER_TABLE = "user"
-USER_CREATE_COLUMNS = ["user_email", "user_password", "user_date", "user_name"]
-USER_UPDATE_COLUMNS = {"user_email", "user_password", "user_name"}
+USER_CREATE_COLUMNS = [
+    "user_email",
+    "user_password",
+    "user_date",
+    "user_name",
+    "user_phone",
+]
+USER_UPDATE_COLUMNS = {"user_email", "user_password", "user_name", "user_phone"}
 USER_LOGIN_COLUMNS = [
     "user_id",
     "user_email",
     "user_password",
     "user_date",
     "user_name",
+    "user_phone",
 ]
 
 connection_factory: Any = None
@@ -39,15 +46,18 @@ class UserCreateRequest(BaseModel):
     user_email: EmailStr | None = None
     user_password: str | None = Field(default=None, min_length=8, max_length=128)
     user_name: str | None = Field(default=None, max_length=45)
+    user_phone: str | None = Field(default=None, max_length=45)
     email: EmailStr | None = None
     password: str | None = Field(default=None, min_length=8, max_length=128)
     name: str | None = Field(default=None, max_length=45)
+    phone: str | None = Field(default=None, max_length=45)
 
 
 class UserUpdateRequest(BaseModel):
     user_email: EmailStr | None = None
     user_password: str | None = Field(default=None, min_length=8, max_length=128)
     user_name: str | None = Field(default=None, max_length=45)
+    user_phone: str | None = Field(default=None, max_length=45)
 
 
 class UserLoginRequest(BaseModel):
@@ -131,6 +141,10 @@ def request_name(request: UserCreateRequest) -> str | None:
     return request.user_name or request.name
 
 
+def request_phone(request: UserCreateRequest) -> str | None:
+    return request.user_phone or request.phone
+
+
 def execute_write(sql: str, params: list[Any]) -> int:
     try:
         with closing(get_auth_connection()) as connection:
@@ -172,6 +186,7 @@ def create_user(request: UserCreateRequest) -> dict[str, str]:
     user_email = request_email(request)
     user_password = request_password(request)
     user_name = request_name(request)
+    user_phone = request_phone(request)
 
     if get_user_by_email(user_email) is not None:
         raise HTTPException(status_code=409, detail="이미 가입된 이메일입니다.")
@@ -188,6 +203,7 @@ def create_user(request: UserCreateRequest) -> dict[str, str]:
                 hashed_password,
                 datetime.now(),
                 user_name,
+                user_phone,
             ],
         )
     except SQLBuilderError as exc:
@@ -214,6 +230,7 @@ def login_user(request: UserLoginRequest) -> dict[str, Any]:
         "user_id": user["user_id"],
         "user_email": user["user_email"],
         "user_name": user["user_name"],
+        "user_phone": user["user_phone"],
         "user_date": user["user_date"],
     }
 
