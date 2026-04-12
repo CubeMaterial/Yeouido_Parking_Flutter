@@ -49,7 +49,7 @@ class AuthApi {
     required String email,
     required String password,
   }) async {
-    final json = await _postJson('auth/login', {
+    final json = await _postJson('auth/admin/login', {
       'admin_email': email,
       'admin_password': password,
     });
