@@ -51,6 +51,7 @@ DB_CONFIG: dict[str, Any] | None = None
 
 DENIED_COLUMNS = {
     "password",
+    "admin_password",
     "user_password",
     "token",
     "code_hash",
