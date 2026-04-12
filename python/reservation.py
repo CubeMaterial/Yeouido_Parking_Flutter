@@ -222,3 +222,44 @@ def delete_reservation(reservation_id: int) -> dict[str, Any]:
 
     affected = execute_write(sql, params)
     return {"status": "deleted", "affected_rows": affected}
+
+from datetime import datetime, timedelta
+
+@router.get("/facility/{facility_id}/date/{target_date}")
+def get_reservations_by_facility_and_date(facility_id: int, target_date: str) -> list[dict]:
+    """
+    target_date 형식: YYYY-MM-DD
+    해당 날짜에 걸쳐 있는 예약 목록 반환
+    """
+    try:
+        day_start = datetime.strptime(target_date, "%Y-%m-%d")
+        day_end = day_start + timedelta(days=1)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="날짜 형식은 YYYY-MM-DD 이어야 합니다.")
+
+    try:
+        with closing(get_connection()) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT
+                        reservation_id,
+                        reservation_start_date,
+                        reservation_end_date,
+                        reservation_state,
+                        reservation_date,
+                        user_id,
+                        facility_id
+                    FROM reservation
+                    WHERE facility_id = %s
+                      AND reservation_state = 1
+                      AND reservation_start_date < %s
+                      AND reservation_end_date > %s
+                    ORDER BY reservation_start_date
+                    """,
+                    (facility_id, day_end, day_start),
+                )
+                rows = cursor.fetchall()
+                return rows
+    except pymysql.MySQLError as exc:
+        raise HTTPException(status_code=500, detail=f"예약 조회 실패: {exc}") from exc
