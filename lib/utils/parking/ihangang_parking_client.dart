@@ -38,6 +38,7 @@ class ParkingLotStatus {
 
 class IHangangParkingClient {
   static const String region8Url = 'https://www.ihangangpark.kr/parking/region/region8';
+  static const Duration _timeout = Duration(seconds: 8);
 
   /// Flutter Web에서 CORS 때문에 원본 사이트로 직접 요청이 막힐 수 있어요.
   /// 그런 경우 프록시(예: FastAPI)에서 HTML을 가져와 JSON으로 내려주는 방식을 사용합니다.
@@ -55,7 +56,7 @@ class IHangangParkingClient {
 
   Future<List<ParkingLotStatus>> _fetchFromProxy() async {
     final uri = Uri.parse('$proxyBaseUrl/parking/region8');
-    final response = await http.get(uri);
+    final response = await http.get(uri).timeout(_timeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('proxy request failed: ${response.statusCode}');
     }
@@ -76,7 +77,7 @@ class IHangangParkingClient {
         'User-Agent': 'Mozilla/5.0 (YeouidoParkingFlutter; +https://example.invalid)',
         'Accept': 'text/html,application/xhtml+xml',
       },
-    );
+    ).timeout(_timeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('html request failed: ${response.statusCode}');
     }
@@ -121,4 +122,3 @@ class IHangangParkingClient {
 }
 
 int mathMax(int a, int b) => a > b ? a : b;
-
