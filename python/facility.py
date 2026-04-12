@@ -37,12 +37,31 @@ def execute_read(sql: str, params: list[Any]) -> list[dict]:
         raise HTTPException(status_code=500, detail=f"DB 조회 실패: {exc}") from exc
 
 
+# 시설 탭용: 전체 시설 조회
 @router.get("")
-def get_facilities() -> list[dict]:
+def get_all_facilities() -> list[dict]:
     try:
         sql, params = build_sql(
             CRUD.READ,
             FACILITY_TABLE,
+            select_all_if_attribute_empty=True,
+        )
+    except SQLBuilderError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return execute_read(sql, params)
+
+
+# 예약 탭용: 예약 가능한 시설만 조회
+@router.get("/reservable")
+def get_reservable_facilities() -> list[dict]:
+    try:
+        sql, params = build_sql(
+            CRUD.READ,
+            FACILITY_TABLE,
+            condition_attribute_name=["f_possible"],
+            condition_attribute_value=[1],
+            select_all_if_attribute_empty=True,
         )
     except SQLBuilderError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -58,6 +77,7 @@ def get_facility_detail(facility_id: int) -> dict:
             FACILITY_TABLE,
             condition_attribute_name=["f_id"],
             condition_attribute_value=[facility_id],
+            select_all_if_attribute_empty=True,
         )
     except SQLBuilderError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
