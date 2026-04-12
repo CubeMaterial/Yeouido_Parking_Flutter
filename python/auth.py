@@ -23,6 +23,13 @@ PASSWORD_SALT_BYTES = 16
 USER_TABLE = "user"
 USER_CREATE_COLUMNS = ["user_email", "user_password", "user_date", "user_name"]
 USER_UPDATE_COLUMNS = {"user_email", "user_password", "user_name"}
+USER_LOGIN_COLUMNS = [
+    "user_id",
+    "user_email",
+    "user_password",
+    "user_date",
+    "user_name",
+]
 
 connection_factory: Any = None
 
@@ -37,6 +44,11 @@ class UserUpdateRequest(BaseModel):
     user_email: EmailStr | None = None
     user_password: str | None = Field(default=None, min_length=8, max_length=128)
     user_name: str | None = Field(default=None, max_length=45)
+
+
+class UserLoginRequest(BaseModel):
+    user_email: EmailStr
+    user_password: str = Field(min_length=8, max_length=128)
 
 
 def set_connection_factory(factory: Any) -> None:
@@ -100,8 +112,36 @@ def execute_write(sql: str, params: list[Any]) -> int:
         raise HTTPException(status_code=500, detail=f"DB 작업에 실패했습니다: {exc}") from exc
 
 
+def execute_read_one(sql: str, params: list[Any]) -> dict[str, Any] | None:
+    try:
+        with closing(get_auth_connection()) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(sql, params)
+                return cursor.fetchone()
+    except pymysql.MySQLError as exc:
+        raise HTTPException(status_code=500, detail=f"DB 조회에 실패했습니다: {exc}") from exc
+
+
+def get_user_by_email(user_email: str) -> dict[str, Any] | None:
+    try:
+        sql, params = build_sql(
+            CRUD.READ,
+            USER_TABLE,
+            attribute_name=USER_LOGIN_COLUMNS,
+            condition_attribute_name=["user_email"],
+            condition_attribute_value=[user_email],
+        )
+    except SQLBuilderError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return execute_read_one(sql, params)
+
+
 @router.post("/users", status_code=201)
 def create_user(request: UserCreateRequest) -> dict[str, str]:
+    if get_user_by_email(request.user_email) is not None:
+        raise HTTPException(status_code=409, detail="이미 가입된 이메일입니다.")
+
     hashed_password = hash_password(request.user_password)
 
     try:
@@ -121,6 +161,25 @@ def create_user(request: UserCreateRequest) -> dict[str, str]:
 
     execute_write(sql, params)
     return {"status": "created"}
+
+
+@router.post("/login")
+def login_user(request: UserLoginRequest) -> dict[str, Any]:
+    user = get_user_by_email(request.user_email)
+
+    if user is None:
+        raise HTTPException(status_code=404, detail="가입되지 않은 이메일입니다.")
+
+    if not verify_password(request.user_password, user["user_password"]):
+        raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
+
+    return {
+        "status": "authenticated",
+        "user_id": user["user_id"],
+        "user_email": user["user_email"],
+        "user_name": user["user_name"],
+        "user_date": user["user_date"],
+    }
 
 
 @router.patch("/users/{user_id}")
