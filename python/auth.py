@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import closing
 from datetime import datetime
 import base64
+import binascii
 import hashlib
 import secrets
 from typing import Any
@@ -35,9 +36,12 @@ connection_factory: Any = None
 
 
 class UserCreateRequest(BaseModel):
-    user_email: EmailStr
-    user_password: str = Field(min_length=8, max_length=128)
+    user_email: EmailStr | None = None
+    user_password: str | None = Field(default=None, min_length=8, max_length=128)
     user_name: str | None = Field(default=None, max_length=45)
+    email: EmailStr | None = None
+    password: str | None = Field(default=None, min_length=8, max_length=128)
+    name: str | None = Field(default=None, max_length=45)
 
 
 class UserUpdateRequest(BaseModel):
@@ -47,8 +51,10 @@ class UserUpdateRequest(BaseModel):
 
 
 class UserLoginRequest(BaseModel):
-    user_email: EmailStr
-    user_password: str = Field(min_length=8, max_length=128)
+    user_email: EmailStr | None = None
+    user_password: str | None = Field(default=None, min_length=8, max_length=128)
+    email: EmailStr | None = None
+    password: str | None = Field(default=None, min_length=8, max_length=128)
 
 
 def set_connection_factory(factory: Any) -> None:
@@ -90,8 +96,14 @@ def verify_password(raw_password: str, stored_password: str) -> bool:
     if algorithm != PASSWORD_HASH_ALGORITHM:
         return False
 
-    salt = base64.urlsafe_b64decode(salt_text + "=" * (-len(salt_text) % 4))
-    expected_digest = base64.urlsafe_b64decode(digest_text + "=" * (-len(digest_text) % 4))
+    try:
+        salt = base64.urlsafe_b64decode(salt_text + "=" * (-len(salt_text) % 4))
+        expected_digest = base64.urlsafe_b64decode(
+            digest_text + "=" * (-len(digest_text) % 4)
+        )
+    except (ValueError, binascii.Error):
+        return False
+
     actual_digest = hashlib.pbkdf2_hmac(
         "sha256",
         raw_password.encode("utf-8"),
@@ -99,6 +111,24 @@ def verify_password(raw_password: str, stored_password: str) -> bool:
         iterations,
     )
     return secrets.compare_digest(actual_digest, expected_digest)
+
+
+def request_email(request: UserCreateRequest | UserLoginRequest) -> str:
+    user_email = request.user_email or request.email
+    if user_email is None:
+        raise HTTPException(status_code=422, detail="이메일이 필요합니다.")
+    return str(user_email).strip().lower()
+
+
+def request_password(request: UserCreateRequest | UserLoginRequest) -> str:
+    user_password = request.user_password or request.password
+    if user_password is None:
+        raise HTTPException(status_code=422, detail="비밀번호가 필요합니다.")
+    return user_password
+
+
+def request_name(request: UserCreateRequest) -> str | None:
+    return request.user_name or request.name
 
 
 def execute_write(sql: str, params: list[Any]) -> int:
@@ -139,10 +169,14 @@ def get_user_by_email(user_email: str) -> dict[str, Any] | None:
 
 @router.post("/users", status_code=201)
 def create_user(request: UserCreateRequest) -> dict[str, str]:
-    if get_user_by_email(request.user_email) is not None:
+    user_email = request_email(request)
+    user_password = request_password(request)
+    user_name = request_name(request)
+
+    if get_user_by_email(user_email) is not None:
         raise HTTPException(status_code=409, detail="이미 가입된 이메일입니다.")
 
-    hashed_password = hash_password(request.user_password)
+    hashed_password = hash_password(user_password)
 
     try:
         sql, params = build_sql(
@@ -150,10 +184,10 @@ def create_user(request: UserCreateRequest) -> dict[str, str]:
             USER_TABLE,
             attribute_name=USER_CREATE_COLUMNS,
             attribute_value=[
-                request.user_email,
+                user_email,
                 hashed_password,
                 datetime.now(),
-                request.user_name,
+                user_name,
             ],
         )
     except SQLBuilderError as exc:
@@ -165,12 +199,14 @@ def create_user(request: UserCreateRequest) -> dict[str, str]:
 
 @router.post("/login")
 def login_user(request: UserLoginRequest) -> dict[str, Any]:
-    user = get_user_by_email(request.user_email)
+    user_email = request_email(request)
+    user_password = request_password(request)
+    user = get_user_by_email(user_email)
 
     if user is None:
         raise HTTPException(status_code=404, detail="가입되지 않은 이메일입니다.")
 
-    if not verify_password(request.user_password, user["user_password"]):
+    if not verify_password(user_password, user["user_password"]):
         raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
 
     return {
