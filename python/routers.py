@@ -1,13 +1,26 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import Any
+
 from fastapi import FastAPI
 
-from auth import router as auth_router
-from reservation import router as reservation_router
-from facility import router as facility_router
+import auth
+import facility
+import reservation
 
 
-def include_routers(app: FastAPI) -> None:
-    app.include_router(auth_router)
-    app.include_router(reservation_router)
-    app.include_router(facility_router)
+ROUTER_MODULES = (
+    auth,
+    reservation,
+    facility,
+)
+
+
+def include_routers(app: FastAPI, connection_factory: Callable[[], Any]) -> None:
+    for module in ROUTER_MODULES:
+        set_connection_factory = getattr(module, "set_connection_factory", None)
+        if callable(set_connection_factory):
+            set_connection_factory(connection_factory)
+
+        app.include_router(module.router)
