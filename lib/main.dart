@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:yeouido_parking_flutter/view/admin_main_page.dart';
+import 'package:yeouido_parking_flutter/utils/app_route/app_router.dart';
+import 'package:yeouido_parking_flutter/view/auth/auth_login.dart';
 
 void main() {
   runApp(const MyApp());
@@ -16,7 +17,8 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey),
       ),
       debugShowCheckedModeBanner: false,
-      home: const AdminMainPage(),
+      home: const LoginPage(),
+      onGenerateRoute: AppRouter.generate,
     );
   }
 }
