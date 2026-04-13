@@ -25,7 +25,10 @@ class FacilityApi {
       throw Exception('Unexpected response');
     }
 
-    return decoded.whereType<Map<String, dynamic>>().map(Facility.fromJson).toList(growable: false);
+    return decoded
+        .whereType<Map<String, dynamic>>()
+        .map(Facility.fromJson)
+        .toList(growable: false);
   }
 
   static Future<Facility> fetchFacilityDetail(int facilityId) async {
