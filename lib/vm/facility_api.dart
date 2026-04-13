@@ -4,13 +4,12 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:yeouido_parking_flutter/model/facility.dart';
 
-class FacilityApi {
-  static const String baseUrl = String.fromEnvironment(
-    'FASTAPI_BASE_URL',
-    defaultValue: 'http://127.0.0.1:8000',
-  );
+import 'api_config.dart';
 
-  static String _normalizedBase() => baseUrl.replaceFirst(RegExp(r'/$'), '');
+class FacilityApi {
+  static String get baseUrl => ApiConfig.fastApiBaseUrl;
+
+  static String _normalizedBase() => baseUrl;
 
   static Future<List<Facility>> fetchFacilities() async {
     final uri = Uri.parse('${_normalizedBase()}/facilities');

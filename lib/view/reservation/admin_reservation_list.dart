@@ -8,6 +8,7 @@ import 'package:yeouido_parking_flutter/model/reservation.dart';
 import 'package:yeouido_parking_flutter/utils/app_route/app_route.dart';
 import 'package:yeouido_parking_flutter/view/common/admin_sidebar.dart';
 import 'package:yeouido_parking_flutter/view/common/admin_top_bar.dart';
+import 'package:yeouido_parking_flutter/vm/api_config.dart';
 
 class AdminReservationList extends StatefulWidget {
   const AdminReservationList({super.key});
@@ -17,10 +18,7 @@ class AdminReservationList extends StatefulWidget {
 }
 
 class _AdminReservationListState extends State<AdminReservationList> {
-  static const String _baseUrl = String.fromEnvironment(
-    'FASTAPI_BASE_URL',
-    defaultValue: 'http://127.0.0.1:8000',
-  );
+  static String get _baseUrl => ApiConfig.fastApiBaseUrl;
 
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   int _selectedIndex = 1;
@@ -53,7 +51,7 @@ class _AdminReservationListState extends State<AdminReservationList> {
     });
 
     try {
-      final base = _baseUrl.replaceFirst(RegExp(r'/$'), '');
+      final base = _baseUrl;
       final uri = Uri.parse(
         '$base/reservation/stats/dashboard',
       ).replace(queryParameters: const {'top': '3'});
@@ -114,7 +112,7 @@ class _AdminReservationListState extends State<AdminReservationList> {
     });
 
     try {
-      final base = _baseUrl.replaceFirst(RegExp(r'/$'), '');
+      final base = _baseUrl;
       final uri = Uri.parse('$base/reservation').replace(
         queryParameters: {
           'limit': _limit.toString(),
@@ -169,7 +167,7 @@ class _AdminReservationListState extends State<AdminReservationList> {
     if (missing.isEmpty) return;
 
     try {
-      final base = _baseUrl.replaceFirst(RegExp(r'/$'), '');
+      final base = _baseUrl;
       final uri = Uri.parse('$base/facilities');
       final response = await http.get(uri).timeout(const Duration(seconds: 8));
       if (response.statusCode < 200 || response.statusCode >= 300) return;
