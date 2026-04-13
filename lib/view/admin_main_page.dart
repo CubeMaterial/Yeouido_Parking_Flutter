@@ -11,6 +11,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:yeouido_parking_flutter/view/common/admin_sidebar.dart';
 import 'package:yeouido_parking_flutter/view/common/admin_top_bar.dart';
 import 'package:yeouido_parking_flutter/utils/parking/ihangang_parking_client.dart';
+import 'package:yeouido_parking_flutter/vm/api_config.dart';
 
 class AdminMainPage extends StatefulWidget {
   const AdminMainPage({super.key});
@@ -20,10 +21,7 @@ class AdminMainPage extends StatefulWidget {
 }
 
 class _AdminMainPageState extends State<AdminMainPage> {
-  static const String _baseUrl = String.fromEnvironment(
-    'FASTAPI_BASE_URL',
-    defaultValue: 'http://127.0.0.1:8000',
-  );
+  static String get _baseUrl => ApiConfig.fastApiBaseUrl;
 
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   int _selectedIndex = 0;
@@ -46,7 +44,7 @@ class _AdminMainPageState extends State<AdminMainPage> {
     });
 
     try {
-      final base = _baseUrl.replaceFirst(RegExp(r'/$'), '');
+      final base = _baseUrl;
       final uri = Uri.parse(
         '$base/reservation/stats/dashboard',
       ).replace(queryParameters: const {'top': '3'});

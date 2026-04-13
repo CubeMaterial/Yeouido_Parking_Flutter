@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'api_config.dart';
+
 class AdminAuthSession {
   final int adminId;
   final String adminEmail;
@@ -40,10 +42,7 @@ class AdminAuthApiException implements Exception {
 }
 
 class AdminAuthApi {
-  static const String baseUrl = String.fromEnvironment(
-    'FASTAPI_BASE_URL',
-    defaultValue: 'http://127.0.0.1:8000',
-  );
+  static String get baseUrl => ApiConfig.fastApiBaseUrl;
 
   static Future<AdminAuthSession> login({
     required String email,
@@ -63,7 +62,7 @@ class AdminAuthApi {
     final client = HttpClient();
 
     try {
-      final uri = Uri.parse('${baseUrl.replaceFirst(RegExp(r'/$'), '')}/$path');
+      final uri = Uri.parse('$baseUrl/$path');
       final request = await client
           .postUrl(uri)
           .timeout(const Duration(seconds: 5));
