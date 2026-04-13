@@ -4,13 +4,16 @@ class ApiConfig {
   static const String _configuredFastApiBaseUrl = String.fromEnvironment(
     'FASTAPI_BASE_URL',
   );
+  static const bool _isCompiledForWeb =
+      bool.fromEnvironment('dart.library.js_interop') ||
+      bool.fromEnvironment('dart.library.html');
 
   static String get fastApiBaseUrl {
     if (_configuredFastApiBaseUrl.isNotEmpty) {
       return _withoutTrailingSlash(_configuredFastApiBaseUrl);
     }
 
-    if (kIsWeb) {
+    if (kIsWeb || _isCompiledForWeb) {
       return 'http://127.0.0.1:8000';
     }
 
