@@ -2,29 +2,31 @@ class Parking {
   final int? parking_id;
   final double parking_lat;
   final double parking_lng;
-  final String parking_info;
   final String parking_name;
-  final String parking_image;
+  final int parking_max;
 
-
-const Parking({
-  this.parking_id,
-  required this.parking_lat,
-  required this.parking_lng,
-  required this.parking_info,
-  required this.parking_name,
-  required this.parking_image,
-
+  const Parking({
+    this.parking_id,
+    required this.parking_lat,
+    required this.parking_lng,
+    required this.parking_name,
+    required this.parking_max,
   });
 
   factory Parking.fromJson(Map<String, dynamic> json) {
+    final rawId = json['parking_id'] ?? json['parkinglot_id'];
+    final rawLat = json['parking_lat'] ?? json['parkinglot_lat'];
+    final rawLng =
+        json['parking_lng'] ?? json['parking_long'] ?? json['parkinglot_long'];
+    final rawName = json['parking_name'] ?? json['parkinglot_name'];
+    final rawMax = json['parking_max'] ?? json['parkinglot_max'];
+
     return Parking(
-      parking_id: int.tryParse(json['parking_id']?.toString() ?? ''),
-      parking_lat: double.tryParse(json['parking_lat']?.toString() ?? '') ?? 37.526603,
-      parking_lng: double.tryParse(json['parking_lng']?.toString() ?? '') ?? 126.934866,
-      parking_name: json['parking_name']?.toString() ?? '', 
-      parking_info: json['parking_info']?.toString() ?? '',
-      parking_image: json['parking_image']?.toString() ?? '',
+      parking_id: int.tryParse(rawId?.toString() ?? ''),
+      parking_lat: double.tryParse(rawLat?.toString() ?? '') ?? 37.526603,
+      parking_lng: double.tryParse(rawLng?.toString() ?? '') ?? 126.934866,
+      parking_name: rawName?.toString() ?? '',
+      parking_max: int.tryParse(rawMax?.toString() ?? '') ?? 0,
     );
   }
 
@@ -34,8 +36,7 @@ const Parking({
       'parking_lat': parking_lat,
       'parking_lng': parking_lng,
       'parking_name': parking_name,
-      'parking_info' : parking_info,
-      'parking_image' : parking_image
+      'parking_max': parking_max,
     };
   }
 }

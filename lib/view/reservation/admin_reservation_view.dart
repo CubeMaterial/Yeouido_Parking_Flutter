@@ -82,7 +82,7 @@ class _AdminReservationViewState extends State<AdminReservationView> {
       });
     }
   }
-
+  
   Future<void> _updateState(int newState) async {
     final reservationId = widget.reservationId;
     if (reservationId == null) return;
@@ -224,7 +224,9 @@ class _ReservationDetailCard extends StatelessWidget {
       detail?['reservation_start_date']?.toString(),
     );
     final endText = _formatTime(detail?['reservation_end_date']?.toString());
-    final peopleText = _people(detail);
+    final userId = _userId(detail);
+    final userName = _userName(detail);
+    final userText = _formatUser(userId: userId, userName: userName);
 
     return Card(
       elevation: 0,
@@ -268,7 +270,7 @@ class _ReservationDetailCard extends StatelessWidget {
             const SizedBox(height: 8),
             _FieldBlock(
               icon: Icons.calendar_month_outlined,
-              title: 'Reservation Date',
+              title: '예약 날짜',
               child: _ReadOnlyBox(
                 text: dateText,
                 trailing: const Icon(Icons.calendar_today_outlined, size: 18),
@@ -280,7 +282,7 @@ class _ReservationDetailCard extends StatelessWidget {
                 Expanded(
                   child: _FieldBlock(
                     icon: Icons.schedule_outlined,
-                    title: 'Start Time',
+                    title: '시작 시간',
                     child: _ReadOnlyBox(
                       text: startText,
                       trailing: const Icon(Icons.access_time, size: 18),
@@ -291,7 +293,7 @@ class _ReservationDetailCard extends StatelessWidget {
                 Expanded(
                   child: _FieldBlock(
                     icon: Icons.schedule_outlined,
-                    title: 'End Time',
+                    title: '종료 시간',
                     child: _ReadOnlyBox(
                       text: endText,
                       trailing: const Icon(Icons.access_time, size: 18),
@@ -302,15 +304,11 @@ class _ReservationDetailCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             _FieldBlock(
-              icon: Icons.group_outlined,
-              title: 'Number of People',
+              icon: Icons.person_outline,
+              title: '신청자',
               child: _ReadOnlyBox(
-                text: peopleText,
-                trailing: const Icon(
-                  Icons.expand_more,
-                  size: 22,
-                  color: Color(0xFF9E9E9E),
-                ),
+                text: userText,
+                trailing: const Icon(Icons.badge_outlined, size: 18),
               ),
             ),
             const SizedBox(height: 18),
@@ -358,18 +356,58 @@ class _ReservationDetailCard extends StatelessWidget {
     );
   }
 
-  static String _people(Map<String, dynamic>? detail) {
+  static int? _userId(Map<String, dynamic>? detail) {
+    final user = detail?['user'];
     final candidates = [
-      detail?['reservation_people'],
-      detail?['people'],
-      detail?['headcount'],
-      detail?['reservation_headcount'],
+      detail?['user_id'],
+      detail?['u_id'],
+      detail?['userid'],
+      detail?['reservation_user_id'],
+      if (user is Map<String, dynamic>) user['user_id'],
+      if (user is Map<String, dynamic>) user['u_id'],
+      if (user is Map<String, dynamic>) user['userid'],
     ];
+
+    for (final c in candidates) {
+      final parsed = _tryParseInt(c);
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
+  static String? _userName(Map<String, dynamic>? detail) {
+    final user = detail?['user'];
+    final candidates = [
+      detail?['user_name'],
+      detail?['username'],
+      detail?['name'],
+      if (user is Map<String, dynamic>) user['user_name'],
+      if (user is Map<String, dynamic>) user['username'],
+      if (user is Map<String, dynamic>) user['name'],
+    ];
+
     for (final c in candidates) {
       final text = c?.toString().trim();
       if (text != null && text.isNotEmpty) return text;
     }
-    return '-';
+    return null;
+  }
+
+  static int? _tryParseInt(Object? value) {
+    if (value is int) return value;
+    final raw = value?.toString().trim();
+    if (raw == null || raw.isEmpty) return null;
+    return int.tryParse(raw);
+  }
+
+  static String _formatUser({required int? userId, required String? userName}) {
+    final id = userId;
+    final name = userName?.trim();
+
+    if (id == null && (name == null || name.isEmpty)) return '-';
+    if (name == null || name.isEmpty) return 'ID: $id';
+    if (id == null) return name;
+    return '$name (ID: $id)';
   }
 
   static DateTime? _tryParseDateTime(String? raw) {

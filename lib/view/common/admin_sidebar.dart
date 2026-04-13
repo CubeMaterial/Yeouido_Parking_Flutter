@@ -9,10 +9,10 @@ class AdminSidebar extends StatelessWidget {
 
   static const _items = <({IconData icon, String label})>[
     (icon: Icons.dashboard_outlined, label: '대시 보드'),
-    (icon: Icons.event_available_outlined, label: '시설 예약 현황'),
+    (icon: Icons.local_parking, label: '주차장'),
     (icon: Icons.apartment_outlined, label: '시설 관리'),
+    (icon: Icons.event_available_outlined, label: '시설 예약 현황'),
     (icon: Icons.help_outline, label: '문의 관리'),
-    (icon: Icons.settings_outlined, label: '설정'),
   ];
 
   @override
@@ -78,9 +78,10 @@ class AdminSidebar extends StatelessWidget {
   void _navigateIfNeeded(BuildContext context, int index) {
     final targetRoute = switch (index) {
       0 => AppRoute.adminMainPage, // 대시 보드
-      1 => AppRoute.adminReservationList, // 시설 예약 현황
-      2 => AppRoute.adminFacilityList, // 시설 관리
-      3 => AppRoute.adminAskingList, // 문의 관리
+      1 => AppRoute.adminParkingList, // 시설 예약 현황
+      2 => AppRoute.adminReservationList, // 시설 예약 현황
+      3 => AppRoute.adminFacilityList, // 시설 관리
+      4 => AppRoute.adminAskingList, // 문의 관리
       _ => null,
     };
 

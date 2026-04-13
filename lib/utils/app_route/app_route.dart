@@ -8,6 +8,11 @@ class AppRoute {
   static const adminLogin = '/admin_login'; // 관리자 로그인
   static const adminMainPage = '/admin_mainpage'; // 관리자 대시보드
 
+  static const adminParkingList = '/admin_parking_list'; // 관리자 대시보드
+  static const adminParkingView = '/admin_parking_view'; // 주차장 상세
+  static const adminParkingUpdate = '/admin_parking_update'; // 주차장 수정
+  static const adminParkingAdd = '/admin_parking_add'; // 주차장 추가
+
   // static const adminPerformanceCreate = '/admin_performance_create';
   static const adminAskingList = '/admin_asking_list'; // 문의글 리스트
   static const adminAskingView = '/admin_asking_view'; // 문의글 보기
