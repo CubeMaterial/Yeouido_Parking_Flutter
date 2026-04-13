@@ -1,14 +1,16 @@
 // 문의글 보기 (관리자 웹) - 채팅 UI
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:yeouido_parking_flutter/view/common/admin_sidebar.dart';
 import 'package:yeouido_parking_flutter/view/common/admin_top_bar.dart';
 
 class AdminAskingView extends StatefulWidget {
-  const AdminAskingView({super.key, this.title});
+  const AdminAskingView({super.key, this.title, this.chatId});
 
   final String? title;
+  final String? chatId;
 
   @override
   State<AdminAskingView> createState() => _AdminAskingViewState();
@@ -22,33 +24,11 @@ class _AdminAskingViewState extends State<AdminAskingView> {
   final _focusNode = FocusNode();
   final _scrollController = ScrollController();
 
-  final List<_ChatMessage> _messages = [];
+  bool _sending = false;
 
   @override
   void initState() {
     super.initState();
-    _seed();
-  }
-
-  void _seed() {
-    final now = DateTime.now();
-    _messages.addAll([
-      _ChatMessage(
-        text: '안녕하세요. 이용 관련 문의가 있어요.',
-        createdAt: now.subtract(const Duration(minutes: 4)),
-        fromAdmin: false,
-      ),
-      _ChatMessage(
-        text: '네, 어떤 점이 불편하셨나요?',
-        createdAt: now.subtract(const Duration(minutes: 3)),
-        fromAdmin: true,
-      ),
-      _ChatMessage(
-        text: '예약 변경이 가능한지 궁금합니다.',
-        createdAt: now.subtract(const Duration(minutes: 2)),
-        fromAdmin: false,
-      ),
-    ]);
   }
 
   @override
@@ -63,23 +43,64 @@ class _AdminAskingViewState extends State<AdminAskingView> {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
 
-    setState(() {
-      _messages.add(
-        _ChatMessage(text: text, createdAt: DateTime.now(), fromAdmin: true),
+    await _sendToFirestore(text);
+  }
+
+  Future<void> _sendToFirestore(String text) async {
+    if (_sending) return;
+    final chatId = widget.chatId;
+    if (chatId == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('채팅을 먼저 선택해 주세요.')),
       );
+      return;
+    }
+
+    setState(() => _sending = true);
+    try {
       _controller.clear();
-    });
 
-    _focusNode.requestFocus();
+      final chatRef = FirebaseFirestore.instance.collection('chats').doc(chatId);
+      final messagesRef = chatRef.collection('messages');
 
-    await Future<void>.delayed(const Duration(milliseconds: 10));
-    if (!mounted) return;
-    if (!_scrollController.hasClients) return;
-    _scrollController.animateTo(
-      0,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-    );
+      await FirebaseFirestore.instance.runTransaction((tx) async {
+        tx.set(
+          chatRef,
+          <String, dynamic>{
+            'updatedAt': FieldValue.serverTimestamp(),
+            'lastMessage': text,
+          },
+          SetOptions(merge: true),
+        );
+        tx.set(
+          messagesRef.doc(),
+          <String, dynamic>{
+            'text': text,
+            'createdAt': FieldValue.serverTimestamp(),
+            'senderType': 'admin',
+            'senderUserID': 0,
+          },
+        );
+      });
+
+      _focusNode.requestFocus();
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      if (!mounted) return;
+      if (!_scrollController.hasClients) return;
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('메시지 전송 실패: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
 
   @override
@@ -87,6 +108,7 @@ class _AdminAskingViewState extends State<AdminAskingView> {
     final title = widget.title?.trim().isNotEmpty == true
         ? widget.title!.trim()
         : '채팅 문의';
+    final chatId = widget.chatId;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -151,31 +173,81 @@ class _AdminAskingViewState extends State<AdminAskingView> {
                                               Navigator.of(context).maybePop(),
                                         ),
                                         Expanded(
-                                          child: ListView.builder(
-                                            controller: _scrollController,
-                                            reverse: true,
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 16,
-                                              vertical: 10,
-                                            ),
-                                            itemCount: _messages.length,
-                                            itemBuilder: (context, index) {
-                                              final msg =
-                                                  _messages[_messages.length -
-                                                      1 -
-                                                      index];
-                                              return _ChatBubble(
-                                                message: msg,
-                                                isAdmin: msg.fromAdmin,
-                                              );
-                                            },
-                                          ),
+                                          child: chatId == null
+                                              ? const Center(
+                                                  child: Text(
+                                                    '채팅을 선택해 주세요.',
+                                                    style: TextStyle(
+                                                      fontWeight: FontWeight.w800,
+                                                      color: Color(0xFF6B7280),
+                                                    ),
+                                                  ),
+                                                )
+                                              : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                                                  stream: FirebaseFirestore.instance
+                                                      .collection('chats')
+                                                      .doc(chatId)
+                                                      .collection('messages')
+                                                      .orderBy('createdAt', descending: false)
+                                                      .snapshots(),
+                                                  builder: (context, snapshot) {
+                                                    if (snapshot.hasError) {
+                                                      return Center(
+                                                        child: Text(
+                                                          '메시지 불러오기 실패: ${snapshot.error}',
+                                                          style: const TextStyle(
+                                                            fontWeight: FontWeight.w800,
+                                                            color: Color(0xFFB91C1C),
+                                                          ),
+                                                        ),
+                                                      );
+                                                    }
+                                                    if (!snapshot.hasData) {
+                                                      return const Center(child: CircularProgressIndicator());
+                                                    }
+
+                                                    final docs = snapshot.data!.docs;
+                                                    if (docs.isEmpty) {
+                                                      return const Center(
+                                                        child: Text(
+                                                          '아직 메시지가 없습니다.',
+                                                          style: TextStyle(
+                                                            fontWeight: FontWeight.w800,
+                                                            color: Color(0xFF6B7280),
+                                                          ),
+                                                        ),
+                                                      );
+                                                    }
+
+                                                    final messages = docs
+                                                        .map((d) => _ChatMessage.fromMap(d.data()))
+                                                        .whereType<_ChatMessage>()
+                                                        .toList(growable: false);
+
+                                                    return ListView.builder(
+                                                      controller: _scrollController,
+                                                      reverse: true,
+                                                      padding: const EdgeInsets.symmetric(
+                                                        horizontal: 16,
+                                                        vertical: 10,
+                                                      ),
+                                                      itemCount: messages.length,
+                                                      itemBuilder: (context, index) {
+                                                        final msg = messages[messages.length - 1 - index];
+                                                        return _ChatBubble(
+                                                          message: msg,
+                                                          isAdmin: msg.fromAdmin,
+                                                        );
+                                                      },
+                                                    );
+                                                  },
+                                                ),
                                         ),
                                         _ChatInput(
                                           controller: _controller,
                                           focusNode: _focusNode,
                                           onSend: _send,
-                                          enabled: true,
+                                          enabled: chatId != null && !_sending,
                                           hintText: '문의 내용을 입력해 주세요',
                                           sendText: '전송',
                                           accentColor: const Color(0xFFF28B7B),
@@ -214,6 +286,27 @@ class _ChatMessage {
   final String text;
   final DateTime createdAt;
   final bool fromAdmin;
+
+  static _ChatMessage? fromMap(Map<String, dynamic> data) {
+    final rawText = (data['text'] ?? data['message'] ?? data['content'])?.toString();
+    final text = rawText?.trim() ?? '';
+    if (text.isEmpty) return null;
+
+    final createdAt = _asDateTime(data['createdAt']) ?? DateTime.now();
+    final fromAdmin = _asBool(data['fromAdmin']) ?? _inferFromAdmin(data);
+
+    return _ChatMessage(
+      text: text,
+      createdAt: createdAt,
+      fromAdmin: fromAdmin,
+    );
+  }
+
+  static bool _inferFromAdmin(Map<String, dynamic> data) {
+    final sender =
+        (data['senderType'] ?? data['sender'] ?? data['role'] ?? data['type'])?.toString().toLowerCase();
+    return sender == 'admin' || sender == 'manager';
+  }
 }
 
 class _ChatHeader extends StatelessWidget {
@@ -451,4 +544,25 @@ String _formatTime(DateTime dt) {
   final hh = dt.hour.toString().padLeft(2, '0');
   final mm = dt.minute.toString().padLeft(2, '0');
   return '$hh:$mm';
+}
+
+DateTime? _asDateTime(dynamic value) {
+  if (value == null) return null;
+  if (value is Timestamp) return value.toDate();
+  if (value is DateTime) return value;
+  if (value is int) {
+    if (value > 1000000000000) return DateTime.fromMillisecondsSinceEpoch(value);
+    return DateTime.fromMillisecondsSinceEpoch(value * 1000);
+  }
+  if (value is String) return DateTime.tryParse(value);
+  return null;
+}
+
+bool? _asBool(dynamic value) {
+  if (value == null) return null;
+  if (value is bool) return value;
+  final text = value.toString().trim().toLowerCase();
+  if (text == 'true' || text == '1' || text == 'y' || text == 'yes') return true;
+  if (text == 'false' || text == '0' || text == 'n' || text == 'no') return false;
+  return null;
 }
