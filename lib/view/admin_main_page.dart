@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+import 'package:yeouido_parking_flutter/utils/app_route/app_route.dart';
 import 'package:yeouido_parking_flutter/view/common/admin_sidebar.dart';
 import 'package:yeouido_parking_flutter/view/common/admin_top_bar.dart';
 import 'package:yeouido_parking_flutter/utils/parking/ihangang_parking_client.dart';
@@ -26,6 +27,8 @@ class _AdminMainPageState extends State<AdminMainPage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   int _selectedIndex = 0;
 
+  final ScrollController _scrollController = ScrollController();
+
   bool _reservationStatsLoading = false;
   String? _reservationStatsError;
   _ReservationDashboardStats? _reservationStats;
@@ -34,6 +37,12 @@ class _AdminMainPageState extends State<AdminMainPage> {
   void initState() {
     super.initState();
     unawaited(_loadReservationDashboardStats());
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadReservationDashboardStats() async {
@@ -111,7 +120,9 @@ class _AdminMainPageState extends State<AdminMainPage> {
                     ),
                     Expanded(
                       child: Scrollbar(
+                        controller: _scrollController,
                         child: SingleChildScrollView(
+                          controller: _scrollController,
                           padding: const EdgeInsets.all(16),
                           child: ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 1200),
@@ -123,7 +134,11 @@ class _AdminMainPageState extends State<AdminMainPage> {
                                   error: _reservationStatsError,
                                   stats: _reservationStats,
                                   onRefresh: _loadReservationDashboardStats,
-                                  onMore: () {},
+                                  onMore: () {
+                                    Navigator.of(context).pushReplacementNamed(
+                                      AppRoute.adminReservationList,
+                                    );
+                                  },
                                 ),
                                 const SizedBox(height: 16),
                                 _ParkingStatusCard(onMore: () {}),
@@ -645,12 +660,12 @@ class _ParkingStatusCardState extends State<_ParkingStatusCard> {
                 color: Color(0xFFD50000),
               ),
             ),
-          const SizedBox(width: 8),
-          TextButton.icon(
-            onPressed: widget.onMore,
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('더보기'),
-          ),
+          // const SizedBox(width: 8),
+          // TextButton.icon(
+          //   onPressed: widget.onMore,
+          //   icon: const Icon(Icons.add, size: 18),
+          //   label: const Text('더보기'),
+          // ),
         ],
       ),
       child: LayoutBuilder(
@@ -812,6 +827,9 @@ class _MapCard extends StatelessWidget {
             options: const MapOptions(
               initialCenter: LatLng(37.5283, 126.9326),
               initialZoom: 13,
+              interactionOptions: InteractionOptions(
+                flags: InteractiveFlag.drag | InteractiveFlag.flingAnimation,
+              ),
             ),
             children: [
               TileLayer(
