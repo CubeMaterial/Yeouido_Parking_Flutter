@@ -143,7 +143,8 @@ class _AdminReservationViewState extends State<AdminReservationView> {
               ? Drawer(
                   child: AdminSidebar(
                     selectedIndex: _selectedIndex,
-                    onSelected: (index) => setState(() => _selectedIndex = index),
+                    onSelected: (index) =>
+                        setState(() => _selectedIndex = index),
                   ),
                 )
               : null,
@@ -154,7 +155,8 @@ class _AdminReservationViewState extends State<AdminReservationView> {
                   width: 220,
                   child: AdminSidebar(
                     selectedIndex: _selectedIndex,
-                    onSelected: (index) => setState(() => _selectedIndex = index),
+                    onSelected: (index) =>
+                        setState(() => _selectedIndex = index),
                   ),
                 ),
               Expanded(
@@ -215,10 +217,14 @@ class _ReservationDetailCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final facilityName = (detail?['facility_name'] ?? detail?['f_name'])?.toString().trim();
+    final facilityName = (detail?['facility_name'] ?? detail?['f_name'])
+        ?.toString()
+        .trim();
 
     final dateText = _formatDate(detail?['reservation_start_date']?.toString());
-    final startText = _formatTime(detail?['reservation_start_date']?.toString());
+    final startText = _formatTime(
+      detail?['reservation_start_date']?.toString(),
+    );
     final endText = _formatTime(detail?['reservation_end_date']?.toString());
     final peopleText = _people(detail);
 
@@ -235,7 +241,9 @@ class _ReservationDetailCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     facilityName?.isNotEmpty == true ? facilityName! : '예약 상세',
-                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
                 if (loading)
@@ -247,7 +255,10 @@ class _ReservationDetailCard extends StatelessWidget {
                 else if (error != null)
                   Tooltip(
                     message: error!,
-                    child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFD50000)),
+                    child: const Icon(
+                      Icons.warning_amber_rounded,
+                      color: Color(0xFFD50000),
+                    ),
                   ),
                 IconButton(
                   onPressed: loading ? null : onRefresh,
@@ -297,7 +308,11 @@ class _ReservationDetailCard extends StatelessWidget {
               title: 'Number of People',
               child: _ReadOnlyBox(
                 text: peopleText,
-                trailing: const Icon(Icons.expand_more, size: 22, color: Color(0xFF9E9E9E)),
+                trailing: const Icon(
+                  Icons.expand_more,
+                  size: 22,
+                  color: Color(0xFF9E9E9E),
+                ),
               ),
             ),
             const SizedBox(height: 18),
@@ -310,9 +325,14 @@ class _ReservationDetailCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       foregroundColor: const Color(0xFFD50000),
                       side: const BorderSide(color: Color(0xFFD50000)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
-                    child: const Text('반려', style: TextStyle(fontWeight: FontWeight.w900)),
+                    child: const Text(
+                      '반려',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -322,9 +342,14 @@ class _ReservationDetailCard extends StatelessWidget {
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       backgroundColor: const Color(0xFF7E7AF5),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
-                    child: const Text('승인', style: TextStyle(fontWeight: FontWeight.w900)),
+                    child: const Text(
+                      '승인',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
                   ),
                 ),
               ],
@@ -375,7 +400,11 @@ class _ReservationDetailCard extends StatelessWidget {
 }
 
 class _FieldBlock extends StatelessWidget {
-  const _FieldBlock({required this.icon, required this.title, required this.child});
+  const _FieldBlock({
+    required this.icon,
+    required this.title,
+    required this.child,
+  });
 
   final IconData icon;
   final String title;
@@ -393,7 +422,9 @@ class _FieldBlock extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               title,
-              style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ],
         ),

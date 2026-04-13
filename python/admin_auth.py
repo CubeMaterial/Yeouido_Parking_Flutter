@@ -27,8 +27,6 @@ connection_factory: Any = None
 class AdminLoginRequest(BaseModel):
     admin_email: EmailStr | None = Field(default=None, max_length=45)
     admin_password: str | None = Field(default=None, min_length=1, max_length=128)
-    email: EmailStr | None = Field(default=None, max_length=45)
-    password: str | None = Field(default=None, min_length=1, max_length=128)
 
 
 def set_connection_factory(factory: Any) -> None:
@@ -43,14 +41,14 @@ def get_admin_auth_connection() -> pymysql.connections.Connection:
 
 
 def request_admin_email(request: AdminLoginRequest) -> str:
-    admin_email = request.admin_email or request.email
+    admin_email = request.admin_email
     if admin_email is None:
         raise HTTPException(status_code=422, detail="관리자 이메일이 필요합니다.")
     return str(admin_email).strip().lower()
 
 
 def request_admin_password(request: AdminLoginRequest) -> str:
-    admin_password = request.admin_password or request.password
+    admin_password = request.admin_password
     if admin_password is None:
         raise HTTPException(status_code=422, detail="관리자 비밀번호가 필요합니다.")
     return admin_password
