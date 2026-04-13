@@ -442,12 +442,14 @@ def _set_reservation_state(reservation_id: int, reservation_state: int) -> dict[
     }
 
 
-@router.delete("/{reservation_id}")
-def delete_reservation(reservation_id: int) -> dict[str, Any]:
+@router.put("/{reservation_id}")
+def cancel_reservation(reservation_id: int) -> dict[str, Any]:
     try:
         sql, params = build_sql(
-            CRUD.DELETE,
+            CRUD.UPDATE,
             RESERVATION_TABLE,
+            attribute_name=["reservation_state"],
+            attribute_value=[0],
             condition_attribute_name=["reservation_id"],
             condition_attribute_value=[reservation_id],
         )
@@ -455,7 +457,14 @@ def delete_reservation(reservation_id: int) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     affected = execute_write(sql, params)
-    return {"status": "deleted", "affected_rows": affected}
+
+    if affected == 0:
+        raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다.")
+
+    return {
+        "status": "cancelled",
+        "affected_rows": affected
+    }
 
 
 @router.get("/facility/{facility_id}/date/{target_date}")
