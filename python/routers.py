@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import FastAPI
 
 import auth
+import admin_auth
 import parking
 import facility
 import reservation
@@ -13,6 +14,7 @@ import reservation
 
 ROUTER_MODULES = (
     auth,
+    admin_auth,
     parking,
     reservation,
     facility,

@@ -2,28 +2,22 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-class AuthSession {
-  final int userId;
-  final String userEmail;
-  final String? userName;
-  final String? userPhone;
-  final String? userDate;
+class AdminAuthSession {
+  final int adminId;
+  final String adminEmail;
+  final String? adminName;
 
-  const AuthSession({
-    required this.userId,
-    required this.userEmail,
-    this.userName,
-    this.userPhone,
-    this.userDate,
+  const AdminAuthSession({
+    required this.adminId,
+    required this.adminEmail,
+    this.adminName,
   });
 
-  factory AuthSession.fromJson(Map<String, dynamic> json) {
-    return AuthSession(
-      userId: _parseInt(json['user_id']),
-      userEmail: json['user_email']?.toString() ?? '',
-      userName: json['user_name']?.toString(),
-      userPhone: json['user_phone']?.toString(),
-      userDate: json['user_date']?.toString(),
+  factory AdminAuthSession.fromJson(Map<String, dynamic> json) {
+    return AdminAuthSession(
+      adminId: _parseInt(json['admin_id']),
+      adminEmail: json['admin_email']?.toString() ?? '',
+      adminName: json['admin_name']?.toString(),
     );
   }
 
@@ -35,47 +29,31 @@ class AuthSession {
   }
 }
 
-class AuthApiException implements Exception {
+class AdminAuthApiException implements Exception {
   final int statusCode;
   final String message;
 
-  const AuthApiException(this.statusCode, this.message);
-
-  bool get isNotRegistered => statusCode == 404;
+  const AdminAuthApiException(this.statusCode, this.message);
 
   @override
   String toString() => message;
 }
 
-class AuthApi {
+class AdminAuthApi {
   static const String baseUrl = String.fromEnvironment(
     'FASTAPI_BASE_URL',
     defaultValue: 'http://127.0.0.1:8000',
   );
 
-  static Future<AuthSession> login({
+  static Future<AdminAuthSession> login({
     required String email,
     required String password,
   }) async {
-    final json = await _postJson('auth/login', {
-      'user_email': email,
-      'user_password': password,
+    final json = await _postJson('auth/admin/login', {
+      'admin_email': email,
+      'admin_password': password,
     });
-    return AuthSession.fromJson(json);
-  }
-
-  static Future<void> signup({
-    required String email,
-    required String password,
-    required String phone,
-    String? name,
-  }) async {
-    await _postJson('auth/users', {
-      'user_email': email,
-      'user_password': password,
-      'user_name': name == null || name.isEmpty ? null : name,
-      'user_phone': phone,
-    });
+    return AdminAuthSession.fromJson(json);
   }
 
   static Future<Map<String, dynamic>> _postJson(
@@ -104,16 +82,16 @@ class AuthApi {
         return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
       }
 
-      throw AuthApiException(response.statusCode, _detailMessage(decoded));
-    } on AuthApiException {
+      throw AdminAuthApiException(response.statusCode, _detailMessage(decoded));
+    } on AdminAuthApiException {
       rethrow;
     } on SocketException {
-      throw const AuthApiException(
+      throw const AdminAuthApiException(
         0,
         'FastAPI 서버에 연결할 수 없습니다. 서버 실행과 주소를 확인해 주세요.',
       );
     } on TimeoutException {
-      throw const AuthApiException(0, 'FastAPI 서버 응답 시간이 초과되었습니다.');
+      throw const AdminAuthApiException(0, 'FastAPI 서버 응답 시간이 초과되었습니다.');
     } finally {
       client.close(force: true);
     }
