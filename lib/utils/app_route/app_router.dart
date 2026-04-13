@@ -36,7 +36,15 @@ class AppRouter {
       case AppRoute.adminAskingResponse:
         return MaterialPageRoute(builder: (_) => const AdminAskingResponse());
       case AppRoute.adminAskingView:
-        return MaterialPageRoute(builder: (_) => const AdminAskingView());
+        final args = settings.arguments;
+        final chatId = args is Map ? args['chatId']?.toString() : null;
+        final title = args is Map ? args['title']?.toString() : null;
+        return MaterialPageRoute(
+          builder: (_) => AdminAskingView(
+            chatId: chatId,
+            title: title,
+          ),
+        );
       case AppRoute.adminReservationList:
         return MaterialPageRoute(builder: (_) => const AdminReservationList());
       case AppRoute.adminReservationView:
