@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+
+import 'package:http/http.dart' as http;
 
 import 'api_config.dart';
 
@@ -59,22 +60,20 @@ class AdminAuthApi {
     String path,
     Map<String, dynamic> body,
   ) async {
-    final client = HttpClient();
+    final uri = Uri.parse('$baseUrl/$path');
 
     try {
-      final uri = Uri.parse('$baseUrl/$path');
-      final request = await client
-          .postUrl(uri)
+      final response = await http
+          .post(
+            uri,
+            headers: const {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode(body),
+          )
           .timeout(const Duration(seconds: 5));
-
-      request.headers.contentType = ContentType.json;
-      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      request.write(jsonEncode(body));
-
-      final response = await request.close().timeout(
-        const Duration(seconds: 5),
-      );
-      final responseBody = await response.transform(utf8.decoder).join();
+      final responseBody = utf8.decode(response.bodyBytes);
       final decoded = responseBody.isEmpty ? null : jsonDecode(responseBody);
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -84,15 +83,21 @@ class AdminAuthApi {
       throw AdminAuthApiException(response.statusCode, _detailMessage(decoded));
     } on AdminAuthApiException {
       rethrow;
-    } on SocketException {
-      throw const AdminAuthApiException(
+    } on http.ClientException catch (error) {
+      throw AdminAuthApiException(
         0,
-        'FastAPI 서버에 연결할 수 없습니다. 서버 실행과 주소를 확인해 주세요.',
+        'FastAPI 서버에 연결할 수 없습니다. 요청 주소: $baseUrl (${error.message})',
       );
     } on TimeoutException {
-      throw const AdminAuthApiException(0, 'FastAPI 서버 응답 시간이 초과되었습니다.');
-    } finally {
-      client.close(force: true);
+      throw AdminAuthApiException(
+        0,
+        'FastAPI 서버 응답 시간이 초과되었습니다. 요청 주소: $baseUrl',
+      );
+    } catch (error) {
+      throw AdminAuthApiException(
+        0,
+        '요청 처리에 실패했습니다. 요청 주소: $baseUrl (${error.runtimeType})',
+      );
     }
   }
 
