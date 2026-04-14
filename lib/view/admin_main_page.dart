@@ -9,9 +9,11 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:yeouido_parking_flutter/utils/app_route/app_route.dart';
+import 'package:yeouido_parking_flutter/utils/parking/ihangang_parking_client.dart';
+import 'package:yeouido_parking_flutter/utils/parking/parking_availability_color.dart';
 import 'package:yeouido_parking_flutter/view/common/admin_sidebar.dart';
 import 'package:yeouido_parking_flutter/view/common/admin_top_bar.dart';
-import 'package:yeouido_parking_flutter/utils/parking/ihangang_parking_client.dart';
+import 'package:yeouido_parking_flutter/vm/yeouido_parking_predictor.dart';
 import 'package:yeouido_parking_flutter/vm/api_config.dart';
 
 class AdminMainPage extends StatefulWidget {
@@ -143,8 +145,8 @@ class _AdminMainPageState extends State<AdminMainPage> {
                                 const SizedBox(height: 16),
                                 _ParkingStatusCard(onMore: () {}),
                                 const SizedBox(height: 16),
-                                _BottomRow(),
-                                const SizedBox(height: 24),
+                                // _BottomRow(),
+                                // const SizedBox(height: 24),
                               ],
                             ),
                           ),
@@ -572,6 +574,7 @@ class _ParkingStatusCard extends StatefulWidget {
 
 class _ParkingStatusCardState extends State<_ParkingStatusCard> {
   final _client = IHangangParkingClient();
+  late final Future<YeouidoParkingWeights2024> _weightsFuture;
 
   List<ParkingLotStatus>? _lots;
   DateTime? _lastUpdated;
@@ -582,6 +585,7 @@ class _ParkingStatusCardState extends State<_ParkingStatusCard> {
   @override
   void initState() {
     super.initState();
+    _weightsFuture = YeouidoParkingWeights2024.load();
     unawaited(_refresh());
   }
 
@@ -620,20 +624,14 @@ class _ParkingStatusCardState extends State<_ParkingStatusCard> {
     const totals = <int>[462, 176, 785, 218, 141];
     const labels = <String>['1주차장', '2주차장', '3주차장', '4주차장', '5주차장'];
 
-    final availableByIndex = List<int>.generate(totals.length, (i) {
-      final available = (_lots != null && i < _lots!.length)
-          ? _lots![i].available
-          : 0;
-      return available.clamp(0, totals[i]);
+    final hasDataByIndex = List<bool>.generate(totals.length, (i) {
+      return _lots != null && i < _lots!.length;
     });
 
-    final colors = const [
-      Color(0xFFD50000),
-      Color(0xFFD50000),
-      Color(0xFFFF5252),
-      Color(0xFFD50000),
-      Color(0xFFD50000),
-    ];
+    final availableByIndex = List<int>.generate(totals.length, (i) {
+      final available = hasDataByIndex[i] ? _lots![i].available : 0;
+      return available.clamp(0, totals[i]);
+    });
 
     return _SectionCard(
       title: '주차장 현황',
@@ -671,26 +669,146 @@ class _ParkingStatusCardState extends State<_ParkingStatusCard> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final double itemWidth = constraints.maxWidth < 720 ? 150 : 140;
-          return Wrap(
-            spacing: 10,
-            runSpacing: 12,
-            alignment: WrapAlignment.spaceBetween,
+          Widget donutWrap({
+            required List<int> availableList,
+            required bool Function(int i) unknownFor,
+            List<int?>? deltaList,
+          }) {
+            return Wrap(
+              spacing: 10,
+              runSpacing: 12,
+              alignment: WrapAlignment.spaceBetween,
+              children: [
+                for (int i = 0; i < totals.length; i++)
+                  SizedBox(
+                    width: itemWidth,
+                    child: _DonutIndicator(
+                      label: labels[i],
+                      available: availableList[i],
+                      total: totals[i],
+                      color: parkingAvailabilityColor(
+                        available: availableList[i],
+                        total: totals[i],
+                        unknown: unknownFor(i),
+                      ),
+                      delta: deltaList == null ? null : deltaList[i],
+                    ),
+                  ),
+              ],
+            );
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (int i = 0; i < totals.length; i++)
-                SizedBox(
-                  width: itemWidth,
-                  child: _DonutIndicator(
-                    label: labels[i],
-                    available: availableByIndex[i],
-                    total: totals[i],
-                    color: colors[i % colors.length],
+              donutWrap(
+                availableList: availableByIndex,
+                unknownFor: (i) => !hasDataByIndex[i],
+              ),
+              const SizedBox(height: 14),
+              const Padding(
+                padding: EdgeInsets.only(left: 2),
+                child: Text(
+                  '1시간 후 예측 (가능 대수)',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF616161),
                   ),
                 ),
+              ),
+              const SizedBox(height: 10),
+              FutureBuilder<YeouidoParkingWeights2024>(
+                future: _weightsFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            '예측 모델 로딩 실패',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF9E9E9E),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            snapshot.error.toString(),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFBDBDBD),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  final weights = snapshot.data;
+                  if (weights == null) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 10),
+                      child: Text(
+                        '예측 모델 로딩 중...',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF9E9E9E),
+                        ),
+                      ),
+                    );
+                  }
+
+                  final now = DateTime.now();
+                  final predictedAvailableByIndex = <int>[];
+                  final unknownByIndex = <bool>[];
+                  final deltaByIndex = <int?>[];
+                  for (int i = 0; i < totals.length; i++) {
+                    if (!hasDataByIndex[i]) {
+                      predictedAvailableByIndex.add(0);
+                      unknownByIndex.add(true);
+                      deltaByIndex.add(null);
+                      continue;
+                    }
+
+                    final predicted = weights.predictAvailableAfter(
+                      currentAvailable: availableByIndex[i],
+                      totalCapacity: totals[i],
+                      now: now,
+                      after: const Duration(hours: 1),
+                    );
+
+                    predictedAvailableByIndex.add(
+                      (predicted ?? availableByIndex[i]).clamp(0, totals[i]),
+                    );
+                    unknownByIndex.add(predicted == null);
+                    deltaByIndex.add(
+                      predicted == null
+                          ? null
+                          : (predicted - availableByIndex[i]),
+                    );
+                  }
+
+                  return donutWrap(
+                    availableList: predictedAvailableByIndex,
+                    unknownFor: (i) => unknownByIndex[i],
+                    deltaList: deltaByIndex,
+                  );
+                },
+              ),
               if (_lastUpdated != null || _lastAttempt != null)
                 SizedBox(
                   width: constraints.maxWidth,
                   child: Padding(
-                    padding: const EdgeInsets.only(top: 4),
+                    padding: const EdgeInsets.only(top: 6),
                     child: Text(
                       _buildUpdatedText(),
                       textAlign: TextAlign.end,
@@ -731,17 +849,30 @@ class _DonutIndicator extends StatelessWidget {
     required this.available,
     required this.total,
     required this.color,
+    this.delta,
   });
 
   final String label;
   final int available;
   final int total;
   final Color color;
+  final int? delta;
 
   @override
   Widget build(BuildContext context) {
     final ratio = total == 0 ? 0.0 : (available / total).clamp(0, 1).toDouble();
     final remaining = math.max(0, total - available);
+    final deltaValue = delta;
+    final deltaText = deltaValue == null
+        ? null
+        : (deltaValue > 0 ? '+$deltaValue' : deltaValue.toString());
+    final deltaColor = deltaValue == null
+        ? null
+        : (deltaValue > 0
+              ? const Color(0xFF2E7D32)
+              : deltaValue < 0
+              ? const Color(0xFFD50000)
+              : const Color(0xFF757575));
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -786,6 +917,17 @@ class _DonutIndicator extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
+        if (deltaText != null) ...[
+          const SizedBox(height: 3),
+          Text(
+            deltaText,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: deltaColor,
+            ),
+          ),
+        ],
       ],
     );
   }

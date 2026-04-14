@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:yeouido_parking_flutter/utils/app_route/app_route.dart';
+import 'package:yeouido_parking_flutter/utils/auth/admin_session_store.dart';
 
 class AdminSidebar extends StatelessWidget {
-  const AdminSidebar({super.key, required this.selectedIndex, required this.onSelected});
+  const AdminSidebar({
+    super.key,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
 
   final int selectedIndex;
   final ValueChanged<int> onSelected;
@@ -18,6 +23,10 @@ class AdminSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final adminName = AdminSessionStore.adminName?.trim();
+    final headerName = (adminName != null && adminName.isNotEmpty)
+        ? adminName
+        : '박상현 팀장';
     return Container(
       color: const Color(0xFFE0E0E0),
       child: SafeArea(
@@ -40,8 +49,10 @@ class AdminSidebar extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      '박상현 팀장',
-                      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                      headerName,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -69,9 +80,66 @@ class AdminSidebar extends StatelessWidget {
                 itemCount: _items.length,
               ),
             ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: _SideActionItem(
+                icon: Icons.logout,
+                label: '로그아웃',
+                color: const Color(0xFFD50000),
+                onTap: () => _confirmLogout(context),
+              ),
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _confirmLogout(BuildContext context) async {
+    final theme = Theme.of(context);
+    final rootNavigator = Navigator.of(context, rootNavigator: true);
+    final localNavigator = Navigator.of(context);
+    final scaffoldState = Scaffold.maybeOf(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      useRootNavigator: true,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('로그아웃'),
+          content: const Text('정말 로그아웃하시겠습니까?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('취소'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFD50000),
+                foregroundColor: Colors.white,
+                textStyle: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('로그아웃'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    await AdminSessionStore.clear();
+
+    if (scaffoldState != null && scaffoldState.isDrawerOpen) {
+      localNavigator.pop(); // close drawer
+    }
+
+    rootNavigator.pushNamedAndRemoveUntil(
+      AppRoute.adminLogin,
+      (route) => false,
     );
   }
 
@@ -134,6 +202,51 @@ class _SideNavItem extends StatelessWidget {
                 label,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SideActionItem extends StatelessWidget {
+  const _SideActionItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.color = const Color(0xFF424242),
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: color),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: color,
                 ),
               ),
             ),

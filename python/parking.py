@@ -136,7 +136,7 @@ def get_all_parkinglots() -> list[dict]:
     return [_normalize_row(r) for r in rows]
 
 
-@router.get("/{parkinglot_id}")
+@router.get("/{parkinglot_id:int}")
 def get_parkinglot_detail(parkinglot_id: int) -> dict:
     try:
         sql, params = build_sql(
@@ -205,7 +205,7 @@ def create_parkinglot(request: ParkingCreateRequest) -> dict[str, Any]:
     )
 
 
-@router.patch("/{parkinglot_id}")
+@router.patch("/{parkinglot_id:int}")
 def update_parkinglot(parkinglot_id: int, request: ParkingUpdateRequest) -> dict[str, Any]:
     update_data: dict[str, Any] = {}
 
@@ -245,7 +245,7 @@ def update_parkinglot(parkinglot_id: int, request: ParkingUpdateRequest) -> dict
     return {"status": "updated", "affected_rows": affected, "parkinglot_id": parkinglot_id}
 
 
-@router.delete("/{parkinglot_id}")
+@router.delete("/{parkinglot_id:int}")
 def delete_parkinglot(parkinglot_id: int) -> dict[str, Any]:
     try:
         sql, params = build_sql(

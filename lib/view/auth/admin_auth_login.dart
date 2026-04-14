@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:yeouido_parking_flutter/utils/auth/admin_session_store.dart';
 
 import '../../vm/admin_auth_api.dart';
 import '../admin_main_page.dart';
@@ -60,6 +61,14 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
       final session = await AdminAuthApi.login(
         email: email,
         password: password,
+      );
+
+      if (!mounted) return;
+
+      await AdminSessionStore.save(
+        adminId: session.adminId,
+        adminEmail: session.adminEmail,
+        adminName: session.adminName,
       );
 
       if (!mounted) return;
